@@ -549,6 +549,52 @@
   .event-select-btns .delete-btn{background:none;border:1px solid var(--risk);color:var(--risk);}
   .event-select-btns .delete-btn:hover:not(:disabled){background:var(--risk);color:#fff;}
   .events-empty{font-size:13.5px;color:var(--muted);padding:6px 0;}
+
+  .confirm-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(28,25,23,.55);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    z-index:1000;
+  }
+  .confirm-box{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:26px 24px 22px;
+    max-width:340px;
+    width:100%;
+    text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.25);
+  }
+  .confirm-logo{max-height:34px;width:auto;margin:0 auto 16px;display:block;}
+  .confirm-message{
+    font-family:'Fraunces',serif;
+    font-size:16px;
+    font-weight:500;
+    color:var(--ink);
+    margin:0 0 22px;
+    line-height:1.4;
+  }
+  .confirm-actions{display:flex;gap:10px;justify-content:center;}
+  .confirm-actions button{
+    font-family:'Fraunces',serif;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    border-radius:999px;
+    padding:10px 20px;
+    cursor:pointer;
+    flex:1;
+  }
+  .confirm-cancel{background:none;border:1px solid var(--ink);color:var(--ink);}
+  .confirm-cancel:hover{background:var(--ink);color:var(--cream-on-dark);}
+  .confirm-ok{background:var(--risk);border:1px solid var(--risk);color:#fff;}
+  .confirm-ok:hover{background:#7c4536;}
 </style>
 </head>
 <body>
@@ -842,17 +888,20 @@ function loadEventIntoForm(ev) {
     multidayCheckbox.checked = true;
     enddatumWrap.style.display = 'block';
     enddatumInput.value = ev.enddatum;
+    enddatumTouched = true;
     syncEnddatumBounds();
   } else {
     multidayCheckbox.checked = false;
     enddatumWrap.style.display = 'none';
-    enddatumInput.value = '';
+    enddatumTouched = false;
+    enddatumInput.value = datumInput.value;
   }
   document.querySelector('.panel:not(#eventsPanel)').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function deleteEvent(id, name) {
-  if (!confirm(`"${name || 'Dieses Event'}" wirklich löschen?`)) return;
+  const ok = await customConfirm(`„${name || 'Dieses Event'}" wirklich löschen?`, 'Löschen');
+  if (!ok) return;
   try {
     await db.collection('events').doc(id).delete();
     loadEvents();
@@ -909,12 +958,17 @@ datumInput.min = today.toISOString().slice(0,10);
 const maxDate = new Date(today.getTime() + 15*86400000);
 datumInput.max = maxDate.toISOString().slice(0,10);
 enddatumInput.max = maxDate.toISOString().slice(0,10);
+enddatumInput.value = datumInput.value; // zeigt das aktuelle Datum, solange nichts anderes gewählt wurde
 
 // Mehrtägiges Event: Checkbox blendet das Enddatum-Feld ein/aus. Enddatum darf
-// nicht vor dem Startdatum liegen; Vorgabe beim ersten Aktivieren = Startdatum.
+// nicht vor dem Startdatum liegen; solange der Nutzer es nicht selbst geändert
+// hat, folgt es automatisch dem Startdatum.
+let enddatumTouched = false;
+enddatumInput.addEventListener('input', () => { enddatumTouched = true; });
+
 function syncEnddatumBounds() {
   enddatumInput.min = datumInput.value;
-  if (enddatumInput.value && enddatumInput.value < datumInput.value) {
+  if (!enddatumTouched || enddatumInput.value < datumInput.value) {
     enddatumInput.value = datumInput.value;
   }
 }
@@ -924,7 +978,6 @@ datumInput.addEventListener('change', syncEnddatumBounds);
 multidayCheckbox.addEventListener('change', () => {
   if (multidayCheckbox.checked) {
     enddatumWrap.style.display = 'block';
-    if (!enddatumInput.value) enddatumInput.value = datumInput.value;
     syncEnddatumBounds();
   } else {
     enddatumWrap.style.display = 'none';
@@ -1120,6 +1173,32 @@ async function searchPlace(q) {
   } catch(e) {
     suggBox.style.display='none';
   }
+}
+
+// Eigener Bestätigungsdialog im App-Design statt des nativen Browser-confirm()
+// (der zeigt die Domain statt des Firmenlogos und lässt sich nicht stylen).
+function customConfirm(message, confirmLabel) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-box">
+        <img src="Firmenlogo.png" alt="" class="confirm-logo">
+        <p class="confirm-message">${message}</p>
+        <div class="confirm-actions">
+          <button type="button" class="confirm-cancel">Abbrechen</button>
+          <button type="button" class="confirm-ok">${confirmLabel || 'Löschen'}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    function close(result) {
+      document.body.removeChild(overlay);
+      resolve(result);
+    }
+    overlay.querySelector('.confirm-cancel').addEventListener('click', () => close(false));
+    overlay.querySelector('.confirm-ok').addEventListener('click', () => close(true));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+  });
 }
 
 function weatherCodeInfo(code) {
