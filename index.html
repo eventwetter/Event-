@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wetter-Check für den großen Tag</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{
+    --ink:#23301F;
+    --sage:#6B8F5C;
+    --sage-deep:#4C6B41;
+    --rose:#BF7667;
+    --rose-deep:#9E5A4C;
+    --gold:#B08D57;
+    --bg:#EFF1EA;
+    --card:#FBFAF6;
+    --line:#D9DCCF;
+    --muted:#6B7565;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Work Sans',sans-serif;
+    line-height:1.5;
+    padding-bottom:60px;
+  }
+  header{
+    padding:48px 24px 32px;
+    max-width:760px;
+    margin:0 auto;
+  }
+  h1{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:clamp(28px,5vw,42px);
+    margin:0 0 8px;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    color:var(--muted);
+    margin:0;
+    max-width:52ch;
+  }
+  main{
+    max-width:760px;
+    margin:0 auto;
+    padding:0 24px;
+  }
+  .panel{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:28px;
+    margin-bottom:24px;
+  }
+  .field-row{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:18px;
+  }
+  @media(min-width:600px){
+    .field-row{grid-template-columns:1.3fr 1fr;}
+    .field-row.time-row{grid-template-columns:1fr 1fr;}
+  }
+  label{
+    display:block;
+    font-size:13px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  input[type=text],input[type=date],input[type=time]{
+    width:100%;
+    padding:11px 12px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:#fff;
+    font-family:inherit;
+    font-size:15px;
+    color:var(--ink);
+  }
+  input:focus{outline:2px solid var(--sage);outline-offset:1px;}
+  .location-wrap{position:relative;}
+  .suggestions{
+    position:absolute;
+    top:calc(100% + 4px);
+    left:0;right:0;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:3px;
+    max-height:220px;
+    overflow-y:auto;
+    z-index:10;
+    box-shadow:0 4px 14px rgba(0,0,0,.08);
+  }
+  .suggestions button{
+    display:block;
+    width:100%;
+    text-align:left;
+    padding:10px 12px;
+    border:none;
+    background:none;
+    font-family:inherit;
+    font-size:14px;
+    cursor:pointer;
+    border-bottom:1px solid #F0EFE8;
+  }
+  .suggestions button:hover{background:var(--bg);}
+
+  .mode-toggle{
+    display:flex;
+    gap:8px;
+    margin-top:10px;
+  }
+  .mode-toggle button{
+    font-family:inherit;
+    font-size:12.5px;
+    color:var(--muted);
+    background:none;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:5px 12px;
+    cursor:pointer;
+  }
+  .mode-toggle button.active{
+    background:var(--sage-deep);
+    border-color:var(--sage-deep);
+    color:#fff;
+  }
+  #mapSection{
+    display:none;
+    margin-top:14px;
+  }
+  #mapSection .map-hint{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+  #locateBtn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-family:inherit;
+    font-size:13px;
+    color:var(--sage-deep);
+    background:#fff;
+    border:1px solid var(--sage);
+    border-radius:3px;
+    padding:8px 12px;
+    cursor:pointer;
+    margin-bottom:10px;
+  }
+  #locateBtn:hover{background:var(--bg);}
+  #locateBtn:disabled{opacity:.5;cursor:default;}
+  #mapEl{
+    height:280px;
+    border:1px solid var(--line);
+    border-radius:4px;
+  }
+  #mapPicked{
+    font-size:13px;
+    color:var(--ink);
+    margin-top:8px;
+    min-height:18px;
+  }
+  .submit-btn{
+    margin-top:20px;
+    background:var(--sage-deep);
+    color:#fff;
+    border:none;
+    padding:13px 22px;
+    border-radius:3px;
+    font-family:inherit;
+    font-size:15px;
+    cursor:pointer;
+  }
+  .submit-btn:hover{background:var(--ink);}
+  .submit-btn:disabled{opacity:.5;cursor:default;}
+  .status-line{
+    font-size:13px;
+    color:var(--muted);
+    margin-top:12px;
+    min-height:18px;
+  }
+  .status-line.err{color:var(--rose-deep);}
+
+  #results{display:none;}
+  .headline-block{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:6px;
+  }
+  .headline-block h2{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:22px;
+    margin:0;
+  }
+  .live-badge{
+    font-size:12px;
+    color:var(--sage-deep);
+    border:1px solid var(--sage);
+    border-radius:12px;
+    padding:3px 10px;
+  }
+  .updated-note{
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:20px;
+  }
+
+  .verdict{
+    display:flex;
+    gap:18px;
+    align-items:flex-start;
+    padding:20px;
+    border-radius:4px;
+    margin-bottom:20px;
+  }
+  .verdict.good{background:#E7EEE1;border:1px solid var(--sage);}
+  .verdict.warn{background:#F3E9DE;border:1px solid var(--gold);}
+  .verdict.bad{background:#F2E1DC;border:1px solid var(--rose);}
+  .verdict .mark{
+    font-family:'Fraunces',serif;
+    font-size:30px;
+    line-height:1;
+    min-width:34px;
+  }
+  .verdict .text h3{
+    margin:0 0 4px;
+    font-size:17px;
+    font-family:'Fraunces',serif;
+    font-weight:500;
+  }
+  .verdict .text p{margin:0;font-size:14px;color:var(--ink);}
+
+  .metric-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    margin-bottom:24px;
+  }
+  @media(max-width:520px){.metric-grid{grid-template-columns:repeat(2,1fr);}}
+  .metric{
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:14px;
+    background:#fff;
+  }
+  .metric .label{font-size:12px;color:var(--muted);margin-bottom:4px;}
+  .metric .value{font-size:20px;font-family:'Fraunces',serif;}
+  .metric .value.flag{color:var(--rose-deep);}
+
+  table.hours{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13.5px;
+    margin-bottom:8px;
+  }
+  table.hours th{
+    text-align:left;
+    font-weight:500;
+    color:var(--muted);
+    padding:8px 6px;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  table.hours td{
+    padding:9px 6px;
+    border-bottom:1px solid #EFEEE6;
+    white-space:nowrap;
+  }
+  table.hours tr.best td{background:#E7EEE1;}
+  table.hours tr.risk td{background:#F2E1DC;}
+  .table-wrap{overflow-x:auto;}
+  .dot{
+    display:inline-block;
+    width:8px;height:8px;
+    border-radius:50%;
+    margin-right:5px;
+  }
+  .dot.g{background:var(--sage);}
+  .dot.a{background:var(--gold);}
+  .dot.r{background:var(--rose-deep);}
+
+  .live-panel{
+    border:1px solid var(--sage);
+    background:#F4F7F1;
+  }
+  .live-panel h2{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:19px;
+    margin:0 0 4px;
+  }
+  .live-panel .sub{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:16px;
+  }
+  .live-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:12px;
+    margin-bottom:6px;
+  }
+  @media(max-width:560px){.live-grid{grid-template-columns:repeat(2,1fr);}}
+  .live-grid .metric{background:#fff;}
+  .precip-warning{
+    margin-top:18px;
+    padding:16px 18px;
+    border-radius:4px;
+    font-size:14px;
+  }
+  .precip-warning.info{background:#E7EEE1;border:1px solid var(--sage);}
+  .precip-warning.alert{background:#F2E1DC;border:1px solid var(--rose);}
+  .precip-warning.unknown{background:#F0EFE8;border:1px solid var(--line);color:var(--muted);}
+  .precip-warning strong{display:block;margin-bottom:4px;font-family:'Fraunces',serif;font-weight:500;font-size:15px;}
+  .radar-link{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    margin-top:14px;
+    font-size:13.5px;
+    color:var(--sage-deep);
+    text-decoration:none;
+    border:1px solid var(--sage);
+    border-radius:3px;
+    padding:8px 14px;
+  }
+  .radar-link:hover{background:#fff;}
+
+  .legend{
+    font-size:12px;
+    color:var(--muted);
+    margin:14px 0 4px;
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .legend span{display:inline-flex;align-items:center;}
+
+  footer{
+    max-width:760px;
+    margin:0 auto;
+    padding:8px 24px 0;
+    font-size:12px;
+    color:var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Wetter-Check für den großen Tag</h1>
+  <p>Ort, Datum und Zeitfenster wählen – daraus wird eine Einschätzung, ob und wann die Trauung oder Feier im Freien stattfinden kann. Datenquelle: Open&#8209;Meteo, live und als Vorschau bis 16 Tage im Voraus.</p>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="field-row">
+      <div class="location-wrap">
+        <label for="ort">Ort</label>
+        <input type="text" id="ort" placeholder="z. B. Wiener Neustadt" autocomplete="off">
+        <div class="suggestions" id="suggestions" style="display:none;"></div>
+        <div class="mode-toggle">
+          <button type="button" id="modeTextBtn" class="active">Ort eingeben</button>
+          <button type="button" id="modeMapBtn">Auf Karte wählen</button>
+        </div>
+        <div id="mapSection">
+          <p class="map-hint">Städte sind groß, und Schauer oder Gewitter kommen oft nur aus einer Richtung – daher hilft der genaue Punkt statt nur des Stadtnamens.</p>
+          <button type="button" id="locateBtn">📍 Meinen Standort verwenden</button>
+          <div id="mapEl"></div>
+          <div id="mapPicked"></div>
+        </div>
+      </div>
+      <div>
+        <label for="datum">Datum</label>
+        <input type="date" id="datum">
+      </div>
+    </div>
+    <div class="field-row time-row" style="margin-top:18px;">
+      <div>
+        <label for="von">Zeitfenster von</label>
+        <input type="time" id="von" value="14:00">
+      </div>
+      <div>
+        <label for="bis">Zeitfenster bis</label>
+        <input type="time" id="bis" value="19:00">
+      </div>
+    </div>
+    <button class="submit-btn" id="checkBtn">Wetter prüfen</button>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+
+  <div id="results">
+    <div class="panel">
+      <div class="headline-block">
+        <h2 id="resultOrt"></h2>
+        <span class="live-badge" id="liveBadge" style="display:none;">live abgeglichen</span>
+      </div>
+      <div class="updated-note" id="updatedNote"></div>
+
+      <div class="verdict" id="verdictBox">
+        <div class="mark" id="verdictMark"></div>
+        <div class="text">
+          <h3 id="verdictTitle"></h3>
+          <p id="verdictText"></p>
+        </div>
+      </div>
+
+      <div class="metric-grid" id="metricGrid"></div>
+
+      <a href="#" id="radarLink" class="radar-link" target="_blank" rel="noopener" style="display:none;">🌧️ Regenradar auf Windy öffnen (für diesen Ort)</a>
+
+      <div class="table-wrap">
+        <table class="hours" id="hoursTable"></table>
+      </div>
+      <div class="legend">
+        <span><span class="dot g"></span>gut geeignet</span>
+        <span><span class="dot a"></span>grenzwertig</span>
+        <span><span class="dot r"></span>kritisch</span>
+      </div>
+    </div>
+
+    <div class="panel live-panel" id="livePanel" style="display:none;">
+      <h2>Live-Nowcast (GeoSphere Austria)</h2>
+      <div class="sub" id="liveSub">Messwerte und 15-Minuten-Nowcast für den genauen Punkt.</div>
+      <div class="live-grid" id="liveGrid"></div>
+      <div class="precip-warning" id="precipWarning" style="display:none;"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Einschätzung als Orientierung, keine Garantie – bei Gewitterwarnung oder hoher Niederschlagswahrscheinlichkeit rechtzeitig auf die Indoor-Alternative vorbereiten.
+</footer>
+
+<script>
+const ortInput = document.getElementById('ort');
+const suggBox = document.getElementById('suggestions');
+const datumInput = document.getElementById('datum');
+const vonInput = document.getElementById('von');
+const bisInput = document.getElementById('bis');
+const checkBtn = document.getElementById('checkBtn');
+const statusLine = document.getElementById('statusLine');
+const resultsEl = document.getElementById('results');
+
+let selectedPlace = null; // {name, lat, lon}
+let suggestTimer = null;
+
+// default date = today
+const today = new Date();
+datumInput.value = today.toISOString().slice(0,10);
+datumInput.min = today.toISOString().slice(0,10);
+const maxDate = new Date(today.getTime() + 15*86400000);
+datumInput.max = maxDate.toISOString().slice(0,10);
+
+ortInput.addEventListener('input', () => {
+  selectedPlace = null;
+  clearTimeout(suggestTimer);
+  const q = ortInput.value.trim();
+  if (q.length < 2) { suggBox.style.display='none'; return; }
+  suggestTimer = setTimeout(() => searchPlace(q), 350);
+});
+
+document.addEventListener('click', (e) => {
+  if (!suggBox.contains(e.target) && e.target !== ortInput) suggBox.style.display='none';
+});
+
+// --- Kartenauswahl & GPS ---
+const modeTextBtn = document.getElementById('modeTextBtn');
+const modeMapBtn = document.getElementById('modeMapBtn');
+const mapSection = document.getElementById('mapSection');
+const locateBtn = document.getElementById('locateBtn');
+const mapPickedEl = document.getElementById('mapPicked');
+let leafletMap = null, leafletMarker = null;
+
+modeTextBtn.addEventListener('click', () => {
+  modeTextBtn.classList.add('active');
+  modeMapBtn.classList.remove('active');
+  mapSection.style.display = 'none';
+});
+
+modeMapBtn.addEventListener('click', () => {
+  modeMapBtn.classList.add('active');
+  modeTextBtn.classList.remove('active');
+  mapSection.style.display = 'block';
+  ensureMap();
+});
+
+function ensureMap() {
+  if (leafletMap) { leafletMap.invalidateSize(); return; }
+  leafletMap = L.map('mapEl').setView([47.8, 16.0], 8); // Raum Wiener Neustadt als Standard
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap-Mitwirkende',
+    maxZoom: 18
+  }).addTo(leafletMap);
+  leafletMap.on('click', (e) => setMapPoint(e.latlng.lat, e.latlng.lng));
+}
+
+function setMapPoint(lat, lon, label) {
+  if (!leafletMarker) {
+    leafletMarker = L.marker([lat, lon]).addTo(leafletMap);
+  } else {
+    leafletMarker.setLatLng([lat, lon]);
+  }
+  leafletMap.panTo([lat, lon]);
+  mapPickedEl.textContent = 'Punkt wird bestimmt …';
+  reverseGeocode(lat, lon).then(name => {
+    const finalName = label || name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    selectedPlace = { name: finalName, lat, lon };
+    ortInput.value = finalName;
+    mapPickedEl.textContent = `Gewählt: ${finalName} (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+  });
+}
+
+async function reverseGeocode(lat, lon) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=14&accept-language=de`);
+    const data = await res.json();
+    if (!data || !data.address) return null;
+    const a = data.address;
+    const place = a.suburb || a.city_district || a.village || a.town || a.city || a.municipality;
+    const region = a.state;
+    return [place, region].filter(Boolean).join(', ');
+  } catch(e) {
+    return null;
+  }
+}
+
+locateBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    mapPickedEl.textContent = 'Geolocation wird von diesem Browser nicht unterstützt.';
+    return;
+  }
+  locateBtn.disabled = true;
+  mapPickedEl.textContent = 'Standort wird ermittelt …';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      modeMapBtn.click();
+      leafletMap.setView([latitude, longitude], 13);
+      setMapPoint(latitude, longitude);
+      locateBtn.disabled = false;
+    },
+    (err) => {
+      mapPickedEl.textContent = 'Standort konnte nicht ermittelt werden – bitte Berechtigung prüfen oder Punkt manuell auf der Karte wählen.';
+      locateBtn.disabled = false;
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+});
+
+async function searchPlace(q) {
+  try {
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=de&format=json`);
+    const data = await res.json();
+    if (!data.results || !data.results.length) { suggBox.style.display='none'; return; }
+    suggBox.innerHTML = '';
+    data.results.forEach(r => {
+      const btn = document.createElement('button');
+      const parts = [r.name, r.admin1, r.country].filter(Boolean);
+      btn.textContent = parts.join(', ');
+      btn.addEventListener('click', () => {
+        selectedPlace = { name: parts.join(', '), lat: r.latitude, lon: r.longitude, tz: r.timezone };
+        ortInput.value = parts.join(', ');
+        suggBox.style.display='none';
+      });
+      suggBox.appendChild(btn);
+    });
+    suggBox.style.display='block';
+  } catch(e) {
+    suggBox.style.display='none';
+  }
+}
+
+function weatherCodeInfo(code) {
+  const map = {
+    0:['Klar','g'],1:['Meist klar','g'],2:['Wolkig','g'],3:['Bedeckt','a'],
+    45:['Nebel','a'],48:['Nebel, reifbildend','a'],
+    51:['Leichter Sprühregen','a'],53:['Sprühregen','a'],55:['Starker Sprühregen','r'],
+    56:['Gefrierender Sprühregen','r'],57:['Gefrierender Sprühregen stark','r'],
+    61:['Leichter Regen','a'],63:['Regen','r'],65:['Starker Regen','r'],
+    66:['Gefrierender Regen','r'],67:['Gefrierender Regen stark','r'],
+    71:['Leichter Schneefall','r'],73:['Schneefall','r'],75:['Starker Schneefall','r'],
+    77:['Schneegriesel','a'],
+    80:['Leichte Regenschauer','a'],81:['Regenschauer','r'],82:['Heftige Regenschauer','r'],
+    85:['Leichte Schneeschauer','r'],86:['Starke Schneeschauer','r'],
+    95:['Gewitter','r'],96:['Gewitter mit Hagel','r'],99:['Schweres Gewitter mit Hagel','r']
+  };
+  return map[code] || ['Unbekannt','a'];
+}
+
+function hourStatus(precipProb, precipMm, gust, code) {
+  const isThunder = code >= 95;
+  if (isThunder || precipProb >= 60 || precipMm >= 1.0 || gust >= 55) return 'r';
+  if (precipProb >= 30 || precipMm >= 0.2 || gust >= 35 || code === 3) return 'a';
+  return 'g';
+}
+
+checkBtn.addEventListener('click', runCheck);
+
+async function runCheck() {
+  statusLine.className = 'status-line';
+  statusLine.textContent = '';
+
+  if (!selectedPlace) {
+    // try to resolve typed text if user didn't click a suggestion
+    const q = ortInput.value.trim();
+    if (!q) { statusLine.textContent = 'Bitte einen Ort eingeben.'; statusLine.className='status-line err'; return; }
+    statusLine.textContent = 'Ort wird gesucht …';
+    try {
+      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=de&format=json`);
+      const data = await res.json();
+      if (!data.results || !data.results.length) {
+        statusLine.textContent = 'Ort nicht gefunden. Bitte aus den Vorschlägen wählen.';
+        statusLine.className='status-line err';
+        return;
+      }
+      const r = data.results[0];
+      selectedPlace = { name: [r.name, r.admin1, r.country].filter(Boolean).join(', '), lat: r.latitude, lon: r.longitude, tz: r.timezone };
+    } catch(e) {
+      statusLine.textContent = 'Ort-Suche fehlgeschlagen.';
+      statusLine.className='status-line err';
+      return;
+    }
+  }
+
+  if (!datumInput.value || !vonInput.value || !bisInput.value) {
+    statusLine.textContent = 'Bitte Datum und Zeitfenster vollständig angeben.';
+    statusLine.className='status-line err';
+    return;
+  }
+  if (vonInput.value >= bisInput.value) {
+    statusLine.textContent = 'Das Ende des Zeitfensters muss nach dem Beginn liegen.';
+    statusLine.className='status-line err';
+    return;
+  }
+
+  checkBtn.disabled = true;
+  statusLine.textContent = 'Wetterdaten werden geladen …';
+  statusLine.className = 'status-line';
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${selectedPlace.lat}&longitude=${selectedPlace.lon}` +
+      `&hourly=temperature_2m,precipitation_probability,precipitation,cloudcover,windgusts_10m,weathercode` +
+      `&current=temperature_2m,precipitation,cloudcover,windgusts_10m,weathercode,is_day` +
+      `&timezone=auto&forecast_days=16`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('API-Fehler');
+    const data = await res.json();
+    renderResults(data);
+    statusLine.textContent = '';
+
+    const radarLink = document.getElementById('radarLink');
+    radarLink.href = `https://www.windy.com/?radar,${selectedPlace.lat.toFixed(4)},${selectedPlace.lon.toFixed(4)},9`;
+    radarLink.style.display = 'inline-flex';
+
+    loadGeosphereLive(selectedPlace.lat, selectedPlace.lon);
+  } catch(e) {
+    statusLine.textContent = 'Wetterdaten konnten nicht geladen werden. Bitte später erneut versuchen.';
+    statusLine.className='status-line err';
+  } finally {
+    checkBtn.disabled = false;
+  }
+}
+
+function renderResults(data) {
+  const chosenDate = datumInput.value;
+  const vonH = vonInput.value;
+  const bisH = bisInput.value;
+  const isToday = chosenDate === new Date().toISOString().slice(0,10);
+
+  // filter hourly entries within chosen date + window
+  const times = data.hourly.time;
+  const idxs = [];
+  for (let i=0;i<times.length;i++){
+    const t = times[i]; // "YYYY-MM-DDTHH:MM"
+    const d = t.slice(0,10);
+    const h = t.slice(11,16);
+    if (d === chosenDate && h >= vonH && h <= bisH) idxs.push(i);
+  }
+
+  document.getElementById('resultOrt').textContent = `${selectedPlace.name} — ${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`;
+  const liveBadge = document.getElementById('liveBadge');
+  liveBadge.style.display = isToday ? 'inline-block' : 'none';
+  document.getElementById('updatedNote').textContent = 'Abgerufen: ' + new Date().toLocaleString('de-AT');
+
+  if (!idxs.length) {
+    document.getElementById('metricGrid').innerHTML = '';
+    document.getElementById('hoursTable').innerHTML = '';
+    setVerdict('a','Keine Daten für dieses Fenster','Für den gewählten Zeitraum liegen keine Stundenwerte vor. Bitte Datum oder Zeitfenster prüfen (Vorschau reicht 16 Tage voraus).');
+    resultsEl.style.display = 'block';
+    return;
+  }
+
+  // aggregate
+  let maxPrecipProb=0, sumPrecip=0, maxGust=0, minTemp=999, maxTemp=-999, worstCode=0, avgCloud=0;
+  const rows = idxs.map(i => {
+    const code = data.hourly.weathercode[i];
+    const prob = data.hourly.precipitation_probability[i];
+    const mm = data.hourly.precipitation[i];
+    const gust = data.hourly.windgusts_10m[i];
+    const temp = data.hourly.temperature_2m[i];
+    const cloud = data.hourly.cloudcover[i];
+    maxPrecipProb = Math.max(maxPrecipProb, prob);
+    sumPrecip += mm;
+    maxGust = Math.max(maxGust, gust);
+    minTemp = Math.min(minTemp, temp);
+    maxTemp = Math.max(maxTemp, temp);
+    avgCloud += cloud;
+    if (code >= 95) worstCode = Math.max(worstCode, code);
+    const status = hourStatus(prob, mm, gust, code);
+    return { time: data.hourly.time[i].slice(11,16), temp, cloud, prob, mm, gust, code, status };
+  });
+  avgCloud = Math.round(avgCloud / rows.length);
+
+  // metrics
+  const metricGrid = document.getElementById('metricGrid');
+  metricGrid.innerHTML = '';
+  addMetric(metricGrid, 'Temperatur', `${Math.round(minTemp)}–${Math.round(maxTemp)} °C`, false);
+  addMetric(metricGrid, 'Bewölkung (Ø)', `${avgCloud} %`, false);
+  addMetric(metricGrid, 'Niederschlagswahrsch.', `${maxPrecipProb} %`, maxPrecipProb>=50);
+  addMetric(metricGrid, 'Niederschlag gesamt', `${sumPrecip.toFixed(1)} mm`, sumPrecip>=1);
+  addMetric(metricGrid, 'Windböen (max.)', `${Math.round(maxGust)} km/h`, maxGust>=50);
+  addMetric(metricGrid, 'Gewitterrisiko', worstCode>=95 ? 'vorhanden' : 'keines', worstCode>=95);
+
+  // table
+  const table = document.getElementById('hoursTable');
+  let bestStart = -1, bestLen = 0, curStart=-1, curLen=0;
+  rows.forEach((r,i) => {
+    if (r.status==='g') { if(curStart===-1) curStart=i; curLen++; }
+    else { if (curLen>bestLen){bestLen=curLen;bestStart=curStart;} curStart=-1; curLen=0; }
+  });
+  if (curLen>bestLen){bestLen=curLen;bestStart=curStart;}
+
+  let html = '<tr><th>Uhrzeit</th><th></th><th>Wetter</th><th>Temp.</th><th>Wolken</th><th>Regen%</th><th>mm</th><th>Böen</th></tr>';
+  rows.forEach((r,i) => {
+    const [label] = weatherCodeInfo(r.code);
+    const dotClass = r.status;
+    const rowClass = (bestStart!==-1 && i>=bestStart && i<bestStart+bestLen) ? 'best' : (r.status==='r' ? 'risk' : '');
+    html += `<tr class="${rowClass}">
+      <td>${r.time}</td>
+      <td><span class="dot ${dotClass}"></span></td>
+      <td>${label}</td>
+      <td>${Math.round(r.temp)}°C</td>
+      <td>${r.cloud}%</td>
+      <td>${r.prob}%</td>
+      <td>${r.mm.toFixed(1)}</td>
+      <td>${Math.round(r.gust)} km/h</td>
+    </tr>`;
+  });
+  table.innerHTML = html;
+
+  // verdict
+  if (worstCode >= 95 || maxPrecipProb >= 60 || sumPrecip >= 2 || maxGust >= 55) {
+    setVerdict('r','Indoor empfohlen',
+      bestLen>0
+        ? `Im gewählten Fenster überwiegt das Risiko (Regen, Gewitter oder starker Wind). Am ehesten geeignet wäre ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr, aber auch dort keine Sicherheit.`
+        : `Über das gesamte Zeitfenster ist mit Regen, Gewitter oder starkem Wind zu rechnen. Für den Outdoor-Teil aktuell keine sichere Phase erkennbar.`);
+  } else if (maxPrecipProb >= 30 || sumPrecip > 0 || maxGust >= 35 || worstCode===3) {
+    setVerdict('a','Outdoor möglich, mit Plan B in Reichweite',
+      bestLen>0
+        ? `Die beste Phase liegt bei ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr. Für den Rest des Fensters Regenschirme oder ein Zelt bereithalten.`
+        : `Leichtes Risiko über das ganze Fenster – Outdoor ist möglich, ein Unterstand sollte trotzdem in der Nähe sein.`);
+  } else {
+    setVerdict('g','Outdoor gut geeignet',
+      `Für ${vonH}–${bisH} Uhr sind kaum Störungen zu erwarten – Bewölkung, Regen und Wind liegen im unkritischen Bereich.`);
+  }
+
+  resultsEl.style.display = 'block';
+}
+
+function addMetric(grid, label, value, flag) {
+  const div = document.createElement('div');
+  div.className = 'metric';
+  div.innerHTML = `<div class="label">${label}</div><div class="value${flag?' flag':''}">${value}</div>`;
+  grid.appendChild(div);
+}
+
+function setVerdict(kind, title, text) {
+  const box = document.getElementById('verdictBox');
+  box.className = 'verdict ' + (kind==='g'?'good':kind==='a'?'warn':'bad');
+  document.getElementById('verdictMark').textContent = kind==='g' ? '✓' : kind==='a' ? '!' : '✕';
+  document.getElementById('verdictTitle').textContent = title;
+  document.getElementById('verdictText').textContent = text;
+}
+
+function formatDate(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  return d.toLocaleDateString('de-AT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+
+// --- GeoSphere Austria Live-Nowcast + Niederschlagswarnung 20 km ---
+
+function isInAustria(lat, lon) {
+  return lat >= 46.3 && lat <= 49.2 && lon >= 9.3 && lon <= 17.3;
+}
+
+const RING_DIRECTIONS = [
+  { deg: 0,   label: 'Norden' },
+  { deg: 45,  label: 'Nordosten' },
+  { deg: 90,  label: 'Osten' },
+  { deg: 135, label: 'Südosten' },
+  { deg: 180, label: 'Süden' },
+  { deg: 225, label: 'Südwesten' },
+  { deg: 270, label: 'Westen' },
+  { deg: 315, label: 'Nordwesten' }
+];
+
+function destinationPoint(lat, lon, bearingDeg, distKm) {
+  const R = 6371;
+  const brng = bearingDeg * Math.PI / 180;
+  const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distKm / R) + Math.cos(lat1) * Math.sin(distKm / R) * Math.cos(brng));
+  const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distKm / R) * Math.cos(lat1), Math.cos(distKm / R) - Math.sin(lat1) * Math.sin(lat2));
+  return [lat2 * 180 / Math.PI, ((lon2 * 180 / Math.PI) + 540) % 360 - 180];
+}
+
+function degToCompass(deg) {
+  const dirs = ['Norden','Nordosten','Osten','Südosten','Süden','Südwesten','Westen','Nordwesten'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+function circularDiff(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+async function loadGeosphereLive(lat, lon) {
+  const livePanel = document.getElementById('livePanel');
+  const liveGrid = document.getElementById('liveGrid');
+  const liveSub = document.getElementById('liveSub');
+  const warnBox = document.getElementById('precipWarning');
+
+  livePanel.style.display = 'block';
+  warnBox.style.display = 'none';
+
+  if (!isInAustria(lat, lon)) {
+    liveGrid.innerHTML = '';
+    liveSub.textContent = 'GeoSphere-Live-Nowcast deckt nur Österreich ab – für diesen Standort nicht verfügbar. Oben gelten die Open-Meteo-Vorschauwerte.';
+    return;
+  }
+
+  liveSub.textContent = 'Live-Werte werden geladen …';
+  liveGrid.innerHTML = '';
+
+  const ring = RING_DIRECTIONS.map(d => {
+    const [rlat, rlon] = destinationPoint(lat, lon, d.deg, 20);
+    return { ...d, lat: rlat, lon: rlon };
+  });
+  const points = [{ label: 'Zentrum', deg: null, lat, lon }, ...ring];
+
+  const params = ['rr','t2m','rh2m','ff','dd','fx'];
+  let url = 'https://dataset.api.hub.geosphere.at/v1/timeseries/forecast/nowcast-v1-15min-1km?';
+  url += params.map(p => `parameters=${p}`).join('&');
+  url += '&' + points.map(pt => `lat_lon=${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`).join('&');
+  url += '&output_format=geojson';
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('GeoSphere-API-Fehler');
+    const data = await res.json();
+    if (!data.features || !data.features.length) throw new Error('Keine Daten');
+
+    // Punkte den Features zuordnen (nächstgelegene Koordinate)
+    const matched = points.map(pt => {
+      let best = null, bestDist = Infinity;
+      data.features.forEach(f => {
+        const [flon, flat] = f.geometry.coordinates;
+        const dist = Math.hypot(flat - pt.lat, flon - pt.lon);
+        if (dist < bestDist) { bestDist = dist; best = f; }
+      });
+      return { ...pt, params: best ? best.properties.parameters : null };
+    });
+
+    const timestamps = data.timestamps || [];
+    const center = matched[0];
+    const ringMatched = matched.slice(1);
+
+    if (!center.params) throw new Error('Zentrum ohne Daten');
+
+    const rrC = center.params.rr ? center.params.rr.data : [];
+    const t2mC = center.params.t2m ? center.params.t2m.data : [];
+    const ffC = center.params.ff ? center.params.ff.data : [];
+    const ddC = center.params.dd ? center.params.dd.data : [];
+    const fxC = center.params.fx ? center.params.fx.data : [];
+
+    const nowIdx = 0;
+    const nowRr = rrC[nowIdx];
+    const nowT = t2mC[nowIdx];
+    const nowFf = ffC[nowIdx];
+    const nowDd = ddC[nowIdx];
+    const nowFx = fxC[nowIdx];
+
+    liveSub.textContent = timestamps[nowIdx]
+      ? `Stand: ${new Date(timestamps[nowIdx]).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'})} Uhr, Punkt ${lat.toFixed(3)}, ${lon.toFixed(3)}`
+      : 'Live-Werte für den genauen Punkt.';
+
+    liveGrid.innerHTML = '';
+    addMetric(liveGrid, 'Temperatur', nowT != null ? `${Math.round(nowT)} °C` : '–', false);
+    addMetric(liveGrid, 'Niederschlag jetzt', nowRr != null ? `${nowRr.toFixed(1)} mm/15min` : '–', nowRr > 0.1);
+    addMetric(liveGrid, 'Wind', (nowFf != null && nowDd != null) ? `${Math.round(nowFf)} km/h aus ${degToCompass(nowDd)}` : '–', false);
+    addMetric(liveGrid, 'Böen', nowFx != null ? `${Math.round(nowFx)} km/h` : '–', nowFx >= 50);
+
+    // Niederschlagswarnung im Umkreis 20 km
+    let localOnsetIdx = -1;
+    for (let i = 0; i < rrC.length; i++) {
+      if (rrC[i] != null && rrC[i] > 0.1) { localOnsetIdx = i; break; }
+    }
+
+    const wetRing = ringMatched.filter(r => r.params && r.params.rr && r.params.rr.data[0] > 0.1);
+    let sourceDir = null;
+    if (wetRing.length && nowDd != null) {
+      wetRing.sort((a,b) => circularDiff(a.deg, nowDd) - circularDiff(b.deg, nowDd));
+      sourceDir = wetRing[0];
+    } else if (wetRing.length) {
+      sourceDir = wetRing[0];
+    }
+
+    if (nowRr > 0.1) {
+      warnBox.className = 'precip-warning alert';
+      warnBox.innerHTML = `<strong>Niederschlag jetzt vor Ort</strong>Am gewählten Punkt fällt laut Nowcast bereits Niederschlag.`;
+      warnBox.style.display = 'block';
+    } else if (localOnsetIdx > 0) {
+      const minutes = localOnsetIdx * 15;
+      const dirText = sourceDir ? ` – erkennbar im Umkreis von 20 km aus ${sourceDir.label}` : '';
+      warnBox.className = 'precip-warning alert';
+      warnBox.innerHTML = `<strong>Niederschlag nähert sich</strong>Nowcast erwartet Niederschlag am gewählten Punkt in ca. ${minutes} Minuten${dirText}.`;
+      warnBox.style.display = 'block';
+    } else if (wetRing.length) {
+      const dirLabels = wetRing.map(w => w.label).join(', ');
+      warnBox.className = 'precip-warning info';
+      warnBox.innerHTML = `<strong>Niederschlag in der Nähe</strong>Im 20-km-Umkreis wird aktuell Niederschlag erfasst (${dirLabels}), erreicht den gewählten Punkt laut Nowcast innerhalb der nächsten Stunde aber nicht.`;
+      warnBox.style.display = 'block';
+    } else {
+      warnBox.className = 'precip-warning info';
+      warnBox.innerHTML = `<strong>Kein Niederschlag erkennbar</strong>Weder am Punkt selbst noch im 20-km-Umkreis zeigt der Nowcast (nächste Stunde) Niederschlag.`;
+      warnBox.style.display = 'block';
+    }
+  } catch (e) {
+    liveSub.textContent = 'Live-Nowcast derzeit nicht abrufbar (GeoSphere-Dienst kurzzeitig nicht erreichbar). Oben gelten die Open-Meteo-Vorschauwerte.';
+    liveGrid.innerHTML = '';
+  }
+}
+</script>
+</body>
+</html>
