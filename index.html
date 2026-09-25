@@ -42,16 +42,11 @@
     line-height:1.55;
     padding-bottom:60px;
   }
-  .bg-logo{
-    position:fixed;
-    inset:0;
-    background-image:url('Firmenlogo.png');
-    background-repeat:no-repeat;
-    background-position:center 40vh;
-    background-size:min(70vw,480px);
-    opacity:.06;
-    pointer-events:none;
-    z-index:-1;
+  .brand-logo{
+    display:block;
+    margin:0 auto 14px;
+    max-height:48px;
+    width:auto;
   }
   .eyebrow{
     font-family:'Fraunces',serif;
@@ -273,11 +268,11 @@
 
   .verdict{
     display:flex;
-    gap:18px;
+    gap:14px;
     align-items:flex-start;
-    padding:20px 20px 20px 18px;
+    padding:14px 16px;
     border-radius:2px;
-    margin-bottom:20px;
+    margin-bottom:14px;
     background:#fff;
     border:1px solid var(--line);
     border-left:5px solid var(--line);
@@ -287,55 +282,56 @@
   .verdict.bad{border-left-color:var(--risk);}
   .verdict .mark{
     font-family:'Fraunces',serif;
-    font-size:28px;
+    font-size:24px;
     line-height:1;
-    min-width:34px;
+    min-width:28px;
   }
   .verdict.good .mark{color:var(--good);}
   .verdict.warn .mark{color:var(--warn);}
   .verdict.bad .mark{color:var(--risk);}
   .verdict .text h3{
-    margin:0 0 4px;
-    font-size:16px;
+    margin:0 0 3px;
+    font-size:15px;
     font-family:'Fraunces',serif;
     font-weight:500;
     letter-spacing:.01em;
   }
-  .verdict .text p{margin:0;font-size:14px;color:var(--ink);}
+  .verdict .text p{margin:0;font-size:13.5px;color:var(--ink);}
 
   .metric-grid{
     display:grid;
     grid-template-columns:repeat(3,1fr);
-    gap:12px;
-    margin-bottom:24px;
+    gap:8px;
+    margin-bottom:16px;
   }
   @media(max-width:520px){.metric-grid{grid-template-columns:repeat(2,1fr);}}
   .metric{
     border:1px solid var(--line);
     border-radius:2px;
-    padding:13px 14px;
+    padding:9px 10px;
     background:#fff;
   }
-  .metric .label{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
-  .metric .value{font-size:19px;font-family:'Fraunces',serif;}
+  .metric .label{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:3px;}
+  .metric .value{font-size:16px;font-family:'Fraunces',serif;}
   .metric .value.flag{color:var(--risk);}
 
   .period-box{
-    margin-bottom:20px;
-    padding:15px 17px;
+    margin-bottom:14px;
+    padding:12px 15px;
     background:#fff;
     border:1px solid var(--line);
     border-radius:2px;
-    font-size:13.5px;
+    font-size:13px;
   }
   .period-line{
     display:flex;
     align-items:baseline;
     gap:6px;
-    padding:4px 0;
+    padding:3px 0;
   }
   .period-line .dot{margin-top:2px;}
   .period-line strong{font-weight:600;margin-right:2px;}
+  .period-line .reason{color:var(--muted);}
   .period-line.conf{
     margin-top:6px;
     padding-top:10px;
@@ -344,6 +340,17 @@
     display:block;
   }
   .period-line.conf strong{display:inline;color:var(--ink);}
+
+  .method-box{
+    margin:24px 0 8px;
+    padding-top:16px;
+    border-top:1px solid var(--line);
+    font-size:12px;
+    line-height:1.6;
+    color:var(--muted);
+  }
+  .method-box strong{color:var(--ink);font-weight:600;}
+  .method-box p{margin:0 0 8px;}
 
   table.hours{
     width:100%;
@@ -518,12 +525,12 @@
 </style>
 </head>
 <body>
-<div class="bg-logo"></div>
 
 <div class="eyebrow">cc-events.at</div>
 <header>
+  <img src="Firmenlogo.png" alt="" class="brand-logo">
   <h1>Event Wetter</h1>
-  <p>Daraus wird eine Einschätzung, ob und wann die Trauung oder Feier im Freien stattfinden kann. Datenquelle: Open&#8209;Meteo, live und als Vorschau bis 16 Tage im Voraus. Sechs Wettermodelle (best_match, ICON-D2, ECMWF IFS, GFS, AROME Austria, AROME France) werden verglichen – aus ihrer Streuung ergibt sich die Prognose-Verlässlichkeit; zusätzlich werden bester und kritischster Zeitraum im Fenster ausgewiesen.</p>
+  <p>Daraus wird eine Einschätzung, ob und wann die Trauung oder Feier im Freien stattfinden kann. Datenquelle: Open&#8209;Meteo, live und als Vorschau bis 16 Tage im Voraus.</p>
 </header>
 
 <main>
@@ -618,6 +625,8 @@
 
       <div class="period-box" id="periodBox"></div>
 
+      <div class="precip-warning" id="precipWarning" style="display:none;"></div>
+
       <a href="#" id="radarLink" class="radar-link" target="_blank" rel="noopener" style="display:none;">🌧️ Regenradar auf Windy öffnen (für diesen Ort)</a>
 
       <div class="table-wrap">
@@ -634,8 +643,9 @@
       <h2>Live-Nowcast (GeoSphere Austria)</h2>
       <div class="sub" id="liveSub">Messwerte und 15-Minuten-Nowcast für den genauen Punkt.</div>
       <div class="live-grid" id="liveGrid"></div>
-      <div class="precip-warning" id="precipWarning" style="display:none;"></div>
     </div>
+
+    <div class="method-box" id="methodBox" style="display:none;"></div>
   </div>
 </main>
 
@@ -664,31 +674,39 @@ let suggestTimer = null;
 // Der apiKey ist NICHT geheim - der Schutz kommt über Firestore-Regeln
 // (nur eingeloggte Team-Accounts dürfen lesen/schreiben) und darüber,
 // dass nur von dir angelegte Accounts sich überhaupt einloggen können.
+// In ein try/catch gepackt: lädt das Firebase-SDK aus irgendeinem Grund
+// nicht (Netzwerk, Blocker, Offline-Vorschau), bleibt wenigstens der
+// eigentliche Wetter-Check nutzbar, statt dass die ganze Seite abstürzt.
 // =====================================================================
-const firebaseConfig = {
-  apiKey: "AIzaSyBOOMI7UkBsT5jNuY3KOcBcfDiU9os8XMs",
-  authDomain: "event-wetter.firebaseapp.com",
-  projectId: "event-wetter",
-  storageBucket: "event-wetter.firebasestorage.app",
-  messagingSenderId: "711746288105",
-  appId: "1:711746288105:web:a8174a792b894098493378"
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
-
 const authGate = document.getElementById('authGate');
 const eventsArea = document.getElementById('eventsArea');
-const loginEmail = document.getElementById('loginEmail');
-const loginPassword = document.getElementById('loginPassword');
-const loginBtn = document.getElementById('loginBtn');
 const loginStatus = document.getElementById('loginStatus');
-const logoutBtn = document.getElementById('logoutBtn');
-const loggedInAs = document.getElementById('loggedInAs');
-const eventsList = document.getElementById('eventsList');
-const eventName = document.getElementById('eventName');
-const saveEventBtn = document.getElementById('saveEventBtn');
-const eventsStatus = document.getElementById('eventsStatus');
+
+if (typeof firebase === 'undefined') {
+  authGate.innerHTML = '<p class="auth-hint">Team-Login momentan nicht verfügbar (Firebase konnte nicht geladen werden).</p>';
+} else {
+try {
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOOMI7UkBsT5jNuY3KOcBcfDiU9os8XMs",
+    authDomain: "event-wetter.firebaseapp.com",
+    projectId: "event-wetter",
+    storageBucket: "event-wetter.firebasestorage.app",
+    messagingSenderId: "711746288105",
+    appId: "1:711746288105:web:a8174a792b894098493378"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const loginEmail = document.getElementById('loginEmail');
+  const loginPassword = document.getElementById('loginPassword');
+  const loginBtn = document.getElementById('loginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const loggedInAs = document.getElementById('loggedInAs');
+  const eventsList = document.getElementById('eventsList');
+  const eventName = document.getElementById('eventName');
+  const saveEventBtn = document.getElementById('saveEventBtn');
+  const eventsStatus = document.getElementById('eventsStatus');
 
 loginBtn.addEventListener('click', async () => {
   loginStatus.className = 'status-line';
@@ -802,6 +820,11 @@ saveEventBtn.addEventListener('click', async () => {
     eventsStatus.textContent = 'Speichern fehlgeschlagen.';
   }
 });
+
+} catch (e) {
+  authGate.innerHTML = '<p class="auth-hint">Team-Login momentan nicht verfügbar (Firebase-Initialisierung fehlgeschlagen).</p>';
+}
+}
 
 // default date = today
 const today = new Date();
@@ -951,17 +974,38 @@ locateBtn.addEventListener('click', () => {
 
 async function searchPlace(q) {
   try {
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=de&format=json`);
-    const data = await res.json();
-    if (!data.results || !data.results.length) { suggBox.style.display='none'; return; }
+    // Parallel: Open-Meteo für Ortsnamen (schnell, saubere Stadt/Region-Labels)
+    // und Nominatim für vollständige Adressen (Straße, Hausnummer, PLZ) -
+    // so erscheinen auch beim Tippen einer Adresse schon Live-Vorschläge.
+    const [omRes, nomRes] = await Promise.allSettled([
+      fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=de&format=json`).then(r => r.json()),
+      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1&accept-language=de`).then(r => r.json())
+    ]);
+
+    const suggestions = [];
+    if (omRes.status === 'fulfilled' && omRes.value.results) {
+      omRes.value.results.forEach(r => {
+        suggestions.push({
+          label: [r.name, r.admin1, r.country].filter(Boolean).join(', '),
+          lat: r.latitude, lon: r.longitude
+        });
+      });
+    }
+    if (nomRes.status === 'fulfilled' && Array.isArray(nomRes.value)) {
+      nomRes.value.forEach(r => {
+        suggestions.push({ label: r.display_name, lat: parseFloat(r.lat), lon: parseFloat(r.lon) });
+      });
+    }
+
+    if (!suggestions.length) { suggBox.style.display='none'; return; }
+
     suggBox.innerHTML = '';
-    data.results.forEach(r => {
+    suggestions.slice(0, 8).forEach(s => {
       const btn = document.createElement('button');
-      const parts = [r.name, r.admin1, r.country].filter(Boolean);
-      btn.textContent = parts.join(', ');
+      btn.textContent = s.label;
       btn.addEventListener('click', () => {
-        selectedPlace = { name: parts.join(', '), lat: r.latitude, lon: r.longitude, tz: r.timezone };
-        ortInput.value = parts.join(', ');
+        selectedPlace = { name: s.label, lat: s.lat, lon: s.lon };
+        ortInput.value = s.label;
         suggBox.style.display='none';
       });
       suggBox.appendChild(btn);
@@ -1093,11 +1137,13 @@ function renderResults(data, claefMap) {
   document.getElementById('updatedNote').textContent = 'Abgerufen: ' + new Date().toLocaleString('de-AT');
 
   const periodBox = document.getElementById('periodBox');
+  const methodBox = document.getElementById('methodBox');
 
   if (!idxs.length) {
     document.getElementById('metricGrid').innerHTML = '';
     document.getElementById('hoursTable').innerHTML = '';
     periodBox.innerHTML = '';
+    methodBox.style.display = 'none';
     setVerdict('a','Keine Daten für dieses Fenster','Für den gewählten Zeitraum liegen keine Stundenwerte vor. Bitte Datum oder Zeitfenster prüfen (Vorschau reicht 16 Tage voraus).');
     resultsEl.style.display = 'block';
     return;
@@ -1175,6 +1221,25 @@ function renderResults(data, claefMap) {
     rows.forEach((r,i) => { if (worstPeakIdx===-1 || r.riskScore > rows[worstPeakIdx].riskScore) worstPeakIdx = i; });
   }
 
+  // Warum ist genau das der kritischste Zeitraum? Ausschlaggebende Faktoren zusammenfassen.
+  function reasonForRange(startIdx, len) {
+    let maxProb = 0, sumMm = 0, maxGust = 0, worstCodeInRange = 0;
+    for (let i = startIdx; i < startIdx + len; i++) {
+      const r = rows[i];
+      maxProb = Math.max(maxProb, r.prob ?? 0);
+      sumMm += r.mm;
+      maxGust = Math.max(maxGust, r.gust);
+      if (r.code >= 95) worstCodeInRange = Math.max(worstCodeInRange, r.code);
+    }
+    const reasons = [];
+    if (worstCodeInRange >= 95) reasons.push('Gewitterrisiko');
+    if (maxProb >= 30) reasons.push(`Niederschlagswahrsch. bis ${maxProb}%`);
+    if (sumMm >= 0.2) reasons.push(`${sumMm.toFixed(1)} mm Niederschlag`);
+    if (maxGust >= 35) reasons.push(`Böen bis ${Math.round(maxGust)} km/h`);
+    if (!reasons.length) reasons.push('erhöhte Bewölkung');
+    return reasons.join(', ');
+  }
+
   // table
   const table = document.getElementById('hoursTable');
   let html = '<tr><th>Uhrzeit</th><th></th><th>Wetter</th><th>Temp.</th><th>Wolken</th><th>Regen%</th><th>mm</th><th>Böen</th></tr>';
@@ -1205,17 +1270,23 @@ function renderResults(data, claefMap) {
     periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> im Fenster keine durchgehend unkritische Phase erkennbar</div>`;
   }
   if (worst.len > 0) {
-    periodHtml += `<div class="period-line bad"><span class="dot r"></span><strong>Kritischster Zeitraum:</strong> ${rows[worst.start].time}–${rows[worst.start+worst.len-1].time} Uhr</div>`;
+    const reason = reasonForRange(worst.start, worst.len);
+    periodHtml += `<div class="period-line bad"><span class="dot r"></span><strong>Kritischster Zeitraum:</strong> ${rows[worst.start].time}–${rows[worst.start+worst.len-1].time} Uhr <span class="reason">(${reason})</span></div>`;
   } else if (worstPeakIdx !== -1 && rows[worstPeakIdx].riskScore > 5) {
-    periodHtml += `<div class="period-line bad"><span class="dot a"></span><strong>Kritischster Zeitpunkt:</strong> ${rows[worstPeakIdx].time} Uhr (im Vergleich die ungünstigste Stunde im Fenster)</div>`;
+    const reason = reasonForRange(worstPeakIdx, 1);
+    periodHtml += `<div class="period-line bad"><span class="dot a"></span><strong>Kritischster Zeitpunkt:</strong> ${rows[worstPeakIdx].time} Uhr <span class="reason">(${reason}, im Vergleich die ungünstigste Stunde im Fenster)</span></div>`;
   } else {
     periodHtml += `<div class="period-line bad"><span class="dot g"></span><strong>Kritischster Zeitraum:</strong> keiner – das ganze Fenster liegt im unkritischen Bereich</div>`;
   }
-  periodHtml += `<div class="period-line conf"><strong>Modellvergleich (best_match, ICON-D2, ECMWF IFS, GFS, AROME Austria, AROME France):</strong> ${confidence.text}</div>`;
-  if (claefUsed) {
-    periodHtml += `<div class="period-line conf">¹ Niederschlag und Windböen für die markierten Stunden verfeinert durch <strong>C-LAEF AlpeAdria</strong> (GeoSphere Austria, 1&nbsp;km, nur nächste ca. 60&nbsp;Std.).</div>`;
-  }
   periodBox.innerHTML = periodHtml;
+
+  // Modellvergleich & C-LAEF-Hinweis: als Methodik-Fußnote ganz unten, nicht in der Übersicht
+  let methodHtml = `<p><strong>Modellvergleich</strong> (best_match, ICON-D2, ECMWF IFS, GFS, AROME Austria, AROME France): ${confidence.text}</p>`;
+  if (claefUsed) {
+    methodHtml += `<p>¹ Niederschlag und Windböen für die markierten Stunden verfeinert durch <strong>C-LAEF AlpeAdria</strong> (GeoSphere Austria, 1&nbsp;km, nur nächste ca. 60&nbsp;Std.).</p>`;
+  }
+  methodBox.innerHTML = methodHtml;
+  methodBox.style.display = 'block';
 
   // verdict
   if (worstCode >= 95 || maxPrecipProb >= 60 || sumPrecip >= 2 || maxGust >= 55) {
