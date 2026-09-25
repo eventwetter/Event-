@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Event Wetter</title>
+<link rel="icon" type="image/png" href="applogo.png">
+<link rel="apple-touch-icon" href="applogo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1C1917">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -37,6 +41,17 @@
     font-family:'Work Sans',sans-serif;
     line-height:1.55;
     padding-bottom:60px;
+  }
+  .bg-logo{
+    position:fixed;
+    inset:0;
+    background-image:url('Firmenlogo.png');
+    background-repeat:no-repeat;
+    background-position:center 40vh;
+    background-size:min(70vw,480px);
+    opacity:.06;
+    pointer-events:none;
+    z-index:-1;
   }
   .eyebrow{
     font-family:'Fraunces',serif;
@@ -503,6 +518,7 @@
 </style>
 </head>
 <body>
+<div class="bg-logo"></div>
 
 <div class="eyebrow">cc-events.at</div>
 <header>
@@ -550,7 +566,7 @@
     <div class="field-row">
       <div class="location-wrap">
         <label for="ort">Ort</label>
-        <input type="text" id="ort" placeholder="z. B. Wiener Neustadt" autocomplete="off">
+        <input type="text" id="ort" placeholder="Ort oder Adresse, z. B. Hauptstraße 12, Wiener Neustadt" autocomplete="off">
         <div class="suggestions" id="suggestions" style="display:none;"></div>
         <div class="mode-toggle">
           <button type="button" id="modeTextBtn" class="active">Ort eingeben</button>
@@ -820,11 +836,29 @@ modeTextBtn.addEventListener('click', () => {
   mapSection.style.display = 'none';
 });
 
-modeMapBtn.addEventListener('click', () => {
+modeMapBtn.addEventListener('click', async () => {
   modeMapBtn.classList.add('active');
   modeTextBtn.classList.remove('active');
   mapSection.style.display = 'block';
   ensureMap();
+
+  // Bereits gewählten Ort / eingetippten Text gleich für die Karte übernehmen
+  if (selectedPlace) {
+    leafletMap.setView([selectedPlace.lat, selectedPlace.lon], 13);
+    setMapPoint(selectedPlace.lat, selectedPlace.lon, selectedPlace.name);
+  } else {
+    const q = ortInput.value.trim();
+    if (q) {
+      mapPickedEl.textContent = `Suche „${q}“ …`;
+      const found = await resolvePlaceFromText(q);
+      if (found) {
+        leafletMap.setView([found.lat, found.lon], 13);
+        setMapPoint(found.lat, found.lon, found.name);
+      } else {
+        mapPickedEl.textContent = 'Nicht gefunden – bitte Punkt manuell auf der Karte wählen.';
+      }
+    }
+  }
 });
 
 function ensureMap() {
@@ -865,6 +899,31 @@ async function reverseGeocode(lat, lon) {
   } catch(e) {
     return null;
   }
+}
+
+// Löst Ortsnamen ODER vollständige Adressen (Straße, Hausnummer, PLZ, Ort) auf.
+// Erst Open-Meteo (schnell, gut für reine Ortsnamen), bei keinem Treffer als
+// Fallback Nominatim (OpenStreetMap), das auch Adressen bis auf Hausnummern-
+// Ebene versteht - für alle, die den Standort optional genauer angeben wollen.
+async function resolvePlaceFromText(q) {
+  if (!q) return null;
+  try {
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=de&format=json`);
+    const data = await res.json();
+    if (data.results && data.results.length) {
+      const r = data.results[0];
+      return { name: [r.name, r.admin1, r.country].filter(Boolean).join(', '), lat: r.latitude, lon: r.longitude };
+    }
+  } catch(e) {}
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&addressdetails=1&accept-language=de`);
+    const data = await res.json();
+    if (data && data.length) {
+      const r = data[0];
+      return { name: r.display_name, lat: parseFloat(r.lat), lon: parseFloat(r.lon) };
+    }
+  } catch(e) {}
+  return null;
 }
 
 locateBtn.addEventListener('click', () => {
@@ -944,25 +1003,17 @@ async function runCheck() {
   statusLine.textContent = '';
 
   if (!selectedPlace) {
-    // try to resolve typed text if user didn't click a suggestion
+    // Text nicht per Vorschlag bestätigt - Ort oder Adresse selbst auflösen
     const q = ortInput.value.trim();
     if (!q) { statusLine.textContent = 'Bitte einen Ort eingeben.'; statusLine.className='status-line err'; return; }
-    statusLine.textContent = 'Ort wird gesucht …';
-    try {
-      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=de&format=json`);
-      const data = await res.json();
-      if (!data.results || !data.results.length) {
-        statusLine.textContent = 'Ort nicht gefunden. Bitte aus den Vorschlägen wählen.';
-        statusLine.className='status-line err';
-        return;
-      }
-      const r = data.results[0];
-      selectedPlace = { name: [r.name, r.admin1, r.country].filter(Boolean).join(', '), lat: r.latitude, lon: r.longitude, tz: r.timezone };
-    } catch(e) {
-      statusLine.textContent = 'Ort-Suche fehlgeschlagen.';
+    statusLine.textContent = 'Ort/Adresse wird gesucht …';
+    const found = await resolvePlaceFromText(q);
+    if (!found) {
+      statusLine.textContent = 'Ort/Adresse nicht gefunden. Bitte aus den Vorschlägen wählen oder genauer eingeben.';
       statusLine.className='status-line err';
       return;
     }
+    selectedPlace = found;
   }
 
   if (!datumInput.value || !vonInput.value || !bisInput.value) {
