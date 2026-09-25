@@ -3,24 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wetter-Check für den großen Tag</title>
+<title>Event Wetter</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Firebase (Team-Login + Events-Speicherung). Config unten im Script eintragen. -->
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <style>
+  /* Palette & Type nach cc-events.at: warmes Creme/Taupe, Schwarz, editoriale
+     Versal-Serife mit Sperrung für Überschriften, ruhige, matte Statusfarben
+     statt greller Ampelfarben. */
   :root{
-    --ink:#23301F;
-    --sage:#6B8F5C;
-    --sage-deep:#4C6B41;
-    --rose:#BF7667;
-    --rose-deep:#9E5A4C;
-    --gold:#B08D57;
-    --bg:#EFF1EA;
-    --card:#FBFAF6;
-    --line:#D9DCCF;
-    --muted:#6B7565;
+    --ink:#1C1917;
+    --bg:#EDE5D8;
+    --card:#F7F2E8;
+    --line:#DBD0BE;
+    --muted:#847A6C;
+    --dark:#1C1917;
+    --cream-on-dark:#F3ECDD;
+    --good:#6E7A57;
+    --warn:#B08D57;
+    --risk:#9C5A46;
   }
   *{box-sizing:border-box;}
   body{
@@ -28,25 +35,39 @@
     background:var(--bg);
     color:var(--ink);
     font-family:'Work Sans',sans-serif;
-    line-height:1.5;
+    line-height:1.55;
     padding-bottom:60px;
   }
+  .eyebrow{
+    font-family:'Fraunces',serif;
+    font-size:11.5px;
+    font-weight:500;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--cream-on-dark);
+    background:var(--dark);
+    padding:9px 24px;
+    text-align:center;
+  }
   header{
-    padding:48px 24px 32px;
+    padding:36px 24px 28px;
     max-width:760px;
     margin:0 auto;
+    text-align:center;
   }
   h1{
     font-family:'Fraunces',serif;
     font-weight:500;
-    font-size:clamp(28px,5vw,42px);
-    margin:0 0 8px;
-    letter-spacing:-0.01em;
+    font-size:clamp(26px,6vw,38px);
+    margin:0 0 12px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
   }
   header p{
     color:var(--muted);
-    margin:0;
-    max-width:52ch;
+    margin:0 auto;
+    max-width:54ch;
+    font-size:14.5px;
   }
   main{
     max-width:760px;
@@ -56,7 +77,7 @@
   .panel{
     background:var(--card);
     border:1px solid var(--line);
-    border-radius:4px;
+    border-radius:2px;
     padding:28px;
     margin-bottom:24px;
   }
@@ -71,21 +92,24 @@
   }
   label{
     display:block;
-    font-size:13px;
+    font-size:11.5px;
+    font-weight:600;
+    letter-spacing:.08em;
+    text-transform:uppercase;
     color:var(--muted);
-    margin-bottom:6px;
+    margin-bottom:7px;
   }
   input[type=text],input[type=date],input[type=time]{
     width:100%;
     padding:11px 12px;
     border:1px solid var(--line);
-    border-radius:3px;
+    border-radius:2px;
     background:#fff;
     font-family:inherit;
     font-size:15px;
     color:var(--ink);
   }
-  input:focus{outline:2px solid var(--sage);outline-offset:1px;}
+  input:focus{outline:1.5px solid var(--ink);outline-offset:1px;}
   .location-wrap{position:relative;}
   .suggestions{
     position:absolute;
@@ -93,11 +117,11 @@
     left:0;right:0;
     background:#fff;
     border:1px solid var(--line);
-    border-radius:3px;
+    border-radius:2px;
     max-height:220px;
     overflow-y:auto;
     z-index:10;
-    box-shadow:0 4px 14px rgba(0,0,0,.08);
+    box-shadow:0 6px 18px rgba(28,25,23,.12);
   }
   .suggestions button{
     display:block;
@@ -109,29 +133,32 @@
     font-family:inherit;
     font-size:14px;
     cursor:pointer;
-    border-bottom:1px solid #F0EFE8;
+    border-bottom:1px solid var(--line);
   }
   .suggestions button:hover{background:var(--bg);}
 
   .mode-toggle{
     display:flex;
     gap:8px;
-    margin-top:10px;
+    margin-top:12px;
   }
   .mode-toggle button{
-    font-family:inherit;
-    font-size:12.5px;
-    color:var(--muted);
+    font-family:'Fraunces',serif;
+    font-size:11px;
+    font-weight:500;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink);
     background:none;
-    border:1px solid var(--line);
-    border-radius:12px;
-    padding:5px 12px;
+    border:1px solid var(--ink);
+    border-radius:999px;
+    padding:7px 16px;
     cursor:pointer;
   }
   .mode-toggle button.active{
-    background:var(--sage-deep);
-    border-color:var(--sage-deep);
-    color:#fff;
+    background:var(--dark);
+    border-color:var(--dark);
+    color:var(--cream-on-dark);
   }
   #mapSection{
     display:none;
@@ -146,22 +173,25 @@
     display:inline-flex;
     align-items:center;
     gap:6px;
-    font-family:inherit;
-    font-size:13px;
-    color:var(--sage-deep);
+    font-family:'Fraunces',serif;
+    font-size:11.5px;
+    font-weight:500;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink);
     background:#fff;
-    border:1px solid var(--sage);
-    border-radius:3px;
-    padding:8px 12px;
+    border:1px solid var(--ink);
+    border-radius:999px;
+    padding:9px 16px;
     cursor:pointer;
     margin-bottom:10px;
   }
-  #locateBtn:hover{background:var(--bg);}
+  #locateBtn:hover{background:var(--ink);color:var(--cream-on-dark);}
   #locateBtn:disabled{opacity:.5;cursor:default;}
   #mapEl{
     height:280px;
     border:1px solid var(--line);
-    border-radius:4px;
+    border-radius:2px;
   }
   #mapPicked{
     font-size:13px;
@@ -170,17 +200,20 @@
     min-height:18px;
   }
   .submit-btn{
-    margin-top:20px;
-    background:var(--sage-deep);
-    color:#fff;
+    margin-top:22px;
+    background:var(--dark);
+    color:var(--cream-on-dark);
     border:none;
-    padding:13px 22px;
-    border-radius:3px;
-    font-family:inherit;
-    font-size:15px;
+    padding:14px 30px;
+    border-radius:999px;
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:13px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
     cursor:pointer;
   }
-  .submit-btn:hover{background:var(--ink);}
+  .submit-btn:hover{background:#000;}
   .submit-btn:disabled{opacity:.5;cursor:default;}
   .status-line{
     font-size:13px;
@@ -188,7 +221,7 @@
     margin-top:12px;
     min-height:18px;
   }
-  .status-line.err{color:var(--rose-deep);}
+  .status-line.err{color:var(--risk);}
 
   #results{display:none;}
   .headline-block{
@@ -202,15 +235,20 @@
   .headline-block h2{
     font-family:'Fraunces',serif;
     font-weight:500;
-    font-size:22px;
+    font-size:19px;
+    letter-spacing:.03em;
+    text-transform:uppercase;
     margin:0;
   }
   .live-badge{
-    font-size:12px;
-    color:var(--sage-deep);
-    border:1px solid var(--sage);
-    border-radius:12px;
-    padding:3px 10px;
+    font-size:10.5px;
+    font-weight:600;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--cream-on-dark);
+    background:var(--dark);
+    border-radius:999px;
+    padding:4px 11px;
   }
   .updated-note{
     font-size:12px;
@@ -222,43 +260,75 @@
     display:flex;
     gap:18px;
     align-items:flex-start;
-    padding:20px;
-    border-radius:4px;
+    padding:20px 20px 20px 18px;
+    border-radius:2px;
     margin-bottom:20px;
+    background:#fff;
+    border:1px solid var(--line);
+    border-left:5px solid var(--line);
   }
-  .verdict.good{background:#E7EEE1;border:1px solid var(--sage);}
-  .verdict.warn{background:#F3E9DE;border:1px solid var(--gold);}
-  .verdict.bad{background:#F2E1DC;border:1px solid var(--rose);}
+  .verdict.good{border-left-color:var(--good);}
+  .verdict.warn{border-left-color:var(--warn);}
+  .verdict.bad{border-left-color:var(--risk);}
   .verdict .mark{
     font-family:'Fraunces',serif;
-    font-size:30px;
+    font-size:28px;
     line-height:1;
     min-width:34px;
   }
+  .verdict.good .mark{color:var(--good);}
+  .verdict.warn .mark{color:var(--warn);}
+  .verdict.bad .mark{color:var(--risk);}
   .verdict .text h3{
     margin:0 0 4px;
-    font-size:17px;
+    font-size:16px;
     font-family:'Fraunces',serif;
     font-weight:500;
+    letter-spacing:.01em;
   }
   .verdict .text p{margin:0;font-size:14px;color:var(--ink);}
 
   .metric-grid{
     display:grid;
     grid-template-columns:repeat(3,1fr);
-    gap:14px;
+    gap:12px;
     margin-bottom:24px;
   }
   @media(max-width:520px){.metric-grid{grid-template-columns:repeat(2,1fr);}}
   .metric{
     border:1px solid var(--line);
-    border-radius:4px;
-    padding:14px;
+    border-radius:2px;
+    padding:13px 14px;
     background:#fff;
   }
-  .metric .label{font-size:12px;color:var(--muted);margin-bottom:4px;}
-  .metric .value{font-size:20px;font-family:'Fraunces',serif;}
-  .metric .value.flag{color:var(--rose-deep);}
+  .metric .label{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+  .metric .value{font-size:19px;font-family:'Fraunces',serif;}
+  .metric .value.flag{color:var(--risk);}
+
+  .period-box{
+    margin-bottom:20px;
+    padding:15px 17px;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:2px;
+    font-size:13.5px;
+  }
+  .period-line{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    padding:4px 0;
+  }
+  .period-line .dot{margin-top:2px;}
+  .period-line strong{font-weight:600;margin-right:2px;}
+  .period-line.conf{
+    margin-top:6px;
+    padding-top:10px;
+    border-top:1px solid var(--line);
+    color:var(--muted);
+    display:block;
+  }
+  .period-line.conf strong{display:inline;color:var(--ink);}
 
   table.hours{
     width:100%;
@@ -268,7 +338,10 @@
   }
   table.hours th{
     text-align:left;
-    font-weight:500;
+    font-weight:600;
+    font-size:11px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
     color:var(--muted);
     padding:8px 6px;
     border-bottom:1px solid var(--line);
@@ -276,11 +349,11 @@
   }
   table.hours td{
     padding:9px 6px;
-    border-bottom:1px solid #EFEEE6;
+    border-bottom:1px solid var(--line);
     white-space:nowrap;
   }
-  table.hours tr.best td{background:#E7EEE1;}
-  table.hours tr.risk td{background:#F2E1DC;}
+  table.hours tr.best td{background:rgba(110,122,87,.13);}
+  table.hours tr.risk td{background:rgba(156,90,70,.13);}
   .table-wrap{overflow-x:auto;}
   .dot{
     display:inline-block;
@@ -288,18 +361,21 @@
     border-radius:50%;
     margin-right:5px;
   }
-  .dot.g{background:var(--sage);}
-  .dot.a{background:var(--gold);}
-  .dot.r{background:var(--rose-deep);}
+  .dot.g{background:var(--good);}
+  .dot.a{background:var(--warn);}
+  .dot.r{background:var(--risk);}
+  .claef-mark{color:var(--ink);font-weight:700;cursor:help;margin-left:1px;}
 
   .live-panel{
-    border:1px solid var(--sage);
-    background:#F4F7F1;
+    border:1px solid var(--line);
+    background:var(--card);
   }
   .live-panel h2{
     font-family:'Fraunces',serif;
     font-weight:500;
-    font-size:19px;
+    font-size:17px;
+    letter-spacing:.03em;
+    text-transform:uppercase;
     margin:0 0 4px;
   }
   .live-panel .sub{
@@ -317,27 +393,34 @@
   .live-grid .metric{background:#fff;}
   .precip-warning{
     margin-top:18px;
-    padding:16px 18px;
-    border-radius:4px;
+    padding:15px 17px;
+    border-radius:2px;
     font-size:14px;
+    background:#fff;
+    border:1px solid var(--line);
+    border-left:5px solid var(--line);
   }
-  .precip-warning.info{background:#E7EEE1;border:1px solid var(--sage);}
-  .precip-warning.alert{background:#F2E1DC;border:1px solid var(--rose);}
-  .precip-warning.unknown{background:#F0EFE8;border:1px solid var(--line);color:var(--muted);}
-  .precip-warning strong{display:block;margin-bottom:4px;font-family:'Fraunces',serif;font-weight:500;font-size:15px;}
+  .precip-warning.info{border-left-color:var(--good);}
+  .precip-warning.alert{border-left-color:var(--risk);}
+  .precip-warning.unknown{color:var(--muted);}
+  .precip-warning strong{display:block;margin-bottom:4px;font-family:'Fraunces',serif;font-weight:500;font-size:14.5px;letter-spacing:.01em;}
   .radar-link{
     display:inline-flex;
     align-items:center;
     gap:6px;
     margin-top:14px;
-    font-size:13.5px;
-    color:var(--sage-deep);
+    font-family:'Fraunces',serif;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    color:var(--ink);
     text-decoration:none;
-    border:1px solid var(--sage);
-    border-radius:3px;
-    padding:8px 14px;
+    border:1px solid var(--ink);
+    border-radius:999px;
+    padding:9px 16px;
   }
-  .radar-link:hover{background:#fff;}
+  .radar-link:hover{background:var(--ink);color:var(--cream-on-dark);}
 
   .legend{
     font-size:12px;
@@ -356,16 +439,113 @@
     font-size:12px;
     color:var(--muted);
   }
+
+  .panel-h2{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:17px;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+    margin:0 0 14px;
+  }
+  .auth-hint{font-size:13.5px;color:var(--muted);margin:0 0 14px;}
+  .submit-btn.small{margin-top:14px;padding:10px 22px;font-size:12px;}
+  .text-btn{
+    background:none;
+    border:none;
+    font-family:'Work Sans',sans-serif;
+    font-size:12.5px;
+    color:var(--muted);
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+  }
+  .events-actions{
+    display:flex;
+    align-items:center;
+    gap:18px;
+    flex-wrap:wrap;
+    margin-top:4px;
+  }
+  .event-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:11px 0;
+    border-bottom:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .event-row:last-child{border-bottom:none;}
+  .event-row .event-info strong{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    display:block;
+    font-size:14.5px;
+  }
+  .event-row .event-info span{color:var(--muted);font-size:12.5px;}
+  .event-row .event-btns{display:flex;gap:8px;flex-shrink:0;}
+  .event-row button{
+    font-family:'Fraunces',serif;
+    font-size:11px;
+    font-weight:500;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    border-radius:999px;
+    padding:6px 13px;
+    cursor:pointer;
+  }
+  .event-row .load-btn{background:none;border:1px solid var(--ink);color:var(--ink);}
+  .event-row .load-btn:hover{background:var(--ink);color:var(--cream-on-dark);}
+  .event-row .delete-btn{background:none;border:1px solid var(--risk);color:var(--risk);}
+  .event-row .delete-btn:hover{background:var(--risk);color:#fff;}
+  .events-empty{font-size:13.5px;color:var(--muted);padding:6px 0;}
 </style>
 </head>
 <body>
 
+<div class="eyebrow">cc-events.at</div>
 <header>
-  <h1>Wetter-Check für den großen Tag</h1>
-  <p>Ort, Datum und Zeitfenster wählen – daraus wird eine Einschätzung, ob und wann die Trauung oder Feier im Freien stattfinden kann. Datenquelle: Open&#8209;Meteo, live und als Vorschau bis 16 Tage im Voraus.</p>
+  <h1>Event Wetter</h1>
+  <p>Daraus wird eine Einschätzung, ob und wann die Trauung oder Feier im Freien stattfinden kann. Datenquelle: Open&#8209;Meteo, live und als Vorschau bis 16 Tage im Voraus. Sechs Wettermodelle (best_match, ICON-D2, ECMWF IFS, GFS, AROME Austria, AROME France) werden verglichen – aus ihrer Streuung ergibt sich die Prognose-Verlässlichkeit; zusätzlich werden bester und kritischster Zeitraum im Fenster ausgewiesen.</p>
 </header>
 
 <main>
+  <div class="panel" id="eventsPanel">
+    <h2 class="panel-h2">Gespeicherte Events</h2>
+
+    <div id="authGate">
+      <p class="auth-hint">Zum Speichern, Laden und Löschen von Events anmelden (Team-Zugang).</p>
+      <div class="field-row time-row">
+        <div>
+          <label for="loginEmail">E-Mail</label>
+          <input type="email" id="loginEmail" autocomplete="username">
+        </div>
+        <div>
+          <label for="loginPassword">Passwort</label>
+          <input type="password" id="loginPassword" autocomplete="current-password">
+        </div>
+      </div>
+      <button type="button" class="submit-btn small" id="loginBtn">Anmelden</button>
+      <div class="status-line" id="loginStatus"></div>
+    </div>
+
+    <div id="eventsArea" style="display:none;">
+      <div id="eventsList"></div>
+      <div class="field-row time-row" style="margin-top:16px;">
+        <div style="grid-column:1/-1;">
+          <label for="eventName">Aktuelles Event speichern als</label>
+          <input type="text" id="eventName" placeholder="z. B. Hochzeit Müller">
+        </div>
+      </div>
+      <div class="events-actions">
+        <button type="button" class="submit-btn small" id="saveEventBtn">Event speichern</button>
+        <button type="button" class="text-btn" id="logoutBtn">Abmelden (<span id="loggedInAs"></span>)</button>
+      </div>
+      <div class="status-line" id="eventsStatus"></div>
+    </div>
+  </div>
+
   <div class="panel">
     <div class="field-row">
       <div class="location-wrap">
@@ -420,6 +600,8 @@
 
       <div class="metric-grid" id="metricGrid"></div>
 
+      <div class="period-box" id="periodBox"></div>
+
       <a href="#" id="radarLink" class="radar-link" target="_blank" rel="noopener" style="display:none;">🌧️ Regenradar auf Windy öffnen (für diesen Ort)</a>
 
       <div class="table-wrap">
@@ -457,6 +639,153 @@ const resultsEl = document.getElementById('results');
 
 let selectedPlace = null; // {name, lat, lon}
 let suggestTimer = null;
+
+// =====================================================================
+// FIREBASE: Team-Login + Events speichern/laden/löschen
+// ---------------------------------------------------------------------
+// WICHTIG: firebaseConfig unten mit den echten Werten aus der Firebase
+// Console ersetzen (Projekteinstellungen → Meine Apps → Web-App → Config).
+// Der apiKey ist NICHT geheim - der Schutz kommt über Firestore-Regeln
+// (nur eingeloggte Team-Accounts dürfen lesen/schreiben) und darüber,
+// dass nur von dir angelegte Accounts sich überhaupt einloggen können.
+// =====================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBOOMI7UkBsT5jNuY3KOcBcfDiU9os8XMs",
+  authDomain: "event-wetter.firebaseapp.com",
+  projectId: "event-wetter",
+  storageBucket: "event-wetter.firebasestorage.app",
+  messagingSenderId: "711746288105",
+  appId: "1:711746288105:web:a8174a792b894098493378"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const authGate = document.getElementById('authGate');
+const eventsArea = document.getElementById('eventsArea');
+const loginEmail = document.getElementById('loginEmail');
+const loginPassword = document.getElementById('loginPassword');
+const loginBtn = document.getElementById('loginBtn');
+const loginStatus = document.getElementById('loginStatus');
+const logoutBtn = document.getElementById('logoutBtn');
+const loggedInAs = document.getElementById('loggedInAs');
+const eventsList = document.getElementById('eventsList');
+const eventName = document.getElementById('eventName');
+const saveEventBtn = document.getElementById('saveEventBtn');
+const eventsStatus = document.getElementById('eventsStatus');
+
+loginBtn.addEventListener('click', async () => {
+  loginStatus.className = 'status-line';
+  loginStatus.textContent = 'Anmeldung läuft …';
+  try {
+    await auth.signInWithEmailAndPassword(loginEmail.value.trim(), loginPassword.value);
+    loginStatus.textContent = '';
+  } catch (e) {
+    loginStatus.className = 'status-line err';
+    loginStatus.textContent = 'Anmeldung fehlgeschlagen: falsche Zugangsdaten oder kein Account hinterlegt.';
+  }
+});
+loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
+
+logoutBtn.addEventListener('click', () => auth.signOut());
+
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    authGate.style.display = 'none';
+    eventsArea.style.display = 'block';
+    loggedInAs.textContent = user.email;
+    loadEvents();
+  } else {
+    authGate.style.display = 'block';
+    eventsArea.style.display = 'none';
+    loginPassword.value = '';
+  }
+});
+
+async function loadEvents() {
+  eventsList.innerHTML = '<div class="events-empty">Lädt …</div>';
+  try {
+    const snap = await db.collection('events').orderBy('datum').get();
+    if (snap.empty) {
+      eventsList.innerHTML = '<div class="events-empty">Noch keine Events gespeichert.</div>';
+      return;
+    }
+    eventsList.innerHTML = '';
+    snap.forEach(doc => {
+      const ev = doc.data();
+      const row = document.createElement('div');
+      row.className = 'event-row';
+      row.innerHTML = `
+        <div class="event-info">
+          <strong>${ev.name || '(ohne Namen)'}</strong>
+          <span>${ev.ortName || ''} — ${ev.datum || ''}${ev.von ? ', ' + ev.von + '–' + ev.bis + ' Uhr' : ''}</span>
+        </div>
+        <div class="event-btns">
+          <button type="button" class="load-btn">Laden</button>
+          <button type="button" class="delete-btn">Löschen</button>
+        </div>`;
+      row.querySelector('.load-btn').addEventListener('click', () => loadEventIntoForm(ev));
+      row.querySelector('.delete-btn').addEventListener('click', () => deleteEvent(doc.id, ev.name));
+      eventsList.appendChild(row);
+    });
+  } catch (e) {
+    eventsList.innerHTML = '<div class="events-empty">Events konnten nicht geladen werden.</div>';
+  }
+}
+
+function loadEventIntoForm(ev) {
+  selectedPlace = { name: ev.ortName, lat: ev.lat, lon: ev.lon };
+  ortInput.value = ev.ortName || '';
+  if (ev.datum) datumInput.value = ev.datum;
+  if (ev.von) vonInput.value = ev.von;
+  if (ev.bis) bisInput.value = ev.bis;
+  document.querySelector('.panel:not(#eventsPanel)').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function deleteEvent(id, name) {
+  if (!confirm(`"${name || 'Dieses Event'}" wirklich löschen?`)) return;
+  try {
+    await db.collection('events').doc(id).delete();
+    loadEvents();
+  } catch (e) {
+    eventsStatus.className = 'status-line err';
+    eventsStatus.textContent = 'Löschen fehlgeschlagen.';
+  }
+}
+
+saveEventBtn.addEventListener('click', async () => {
+  eventsStatus.className = 'status-line';
+  if (!selectedPlace) {
+    eventsStatus.className = 'status-line err';
+    eventsStatus.textContent = 'Bitte zuerst unten einen Ort wählen.';
+    return;
+  }
+  if (!eventName.value.trim()) {
+    eventsStatus.className = 'status-line err';
+    eventsStatus.textContent = 'Bitte einen Namen für das Event eingeben.';
+    return;
+  }
+  eventsStatus.textContent = 'Speichert …';
+  try {
+    await db.collection('events').add({
+      name: eventName.value.trim(),
+      ortName: selectedPlace.name,
+      lat: selectedPlace.lat,
+      lon: selectedPlace.lon,
+      datum: datumInput.value,
+      von: vonInput.value,
+      bis: bisInput.value,
+      createdBy: auth.currentUser.email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    eventName.value = '';
+    eventsStatus.textContent = 'Event gespeichert.';
+    loadEvents();
+  } catch (e) {
+    eventsStatus.className = 'status-line err';
+    eventsStatus.textContent = 'Speichern fehlgeschlagen.';
+  }
+});
 
 // default date = today
 const today = new Date();
@@ -652,14 +981,24 @@ async function runCheck() {
   statusLine.className = 'status-line';
 
   try {
+    const MODEL_LIST = 'best_match,icon_d2,ecmwf_ifs04,gfs_seamless,geosphere_arome_austria,arome_france';
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${selectedPlace.lat}&longitude=${selectedPlace.lon}` +
-      `&hourly=temperature_2m,precipitation_probability,precipitation,cloudcover,windgusts_10m,weathercode` +
-      `&current=temperature_2m,precipitation,cloudcover,windgusts_10m,weathercode,is_day` +
-      `&timezone=auto&forecast_days=16`;
+      `&hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,wind_speed_10m,wind_gusts_10m,weather_code` +
+      `&current=temperature_2m,precipitation,cloud_cover,wind_gusts_10m,weather_code,is_day` +
+      `&models=${MODEL_LIST}&timezone=auto&forecast_days=16`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('API-Fehler');
     const data = await res.json();
-    renderResults(data);
+
+    // C-LAEF AlpeAdria (1km) nur innerhalb Österreichs und für die nächsten ca. 60 Std. verfügbar
+    const targetStartMs = new Date(`${datumInput.value}T${vonInput.value}:00`).getTime();
+    const hoursUntilStart = (targetStartMs - Date.now()) / 3600000;
+    let claefMap = null;
+    if (isInAustria(selectedPlace.lat, selectedPlace.lon) && hoursUntilStart <= 60 && hoursUntilStart >= -24) {
+      claefMap = await fetchClaefHourlyMap(selectedPlace.lat, selectedPlace.lon);
+    }
+
+    renderResults(data, claefMap);
     statusLine.textContent = '';
 
     const radarLink = document.getElementById('radarLink');
@@ -675,20 +1014,26 @@ async function runCheck() {
   }
 }
 
-function renderResults(data) {
+function renderResults(data, claefMap) {
   const chosenDate = datumInput.value;
   const vonH = vonInput.value;
   const bisH = bisInput.value;
   const isToday = chosenDate === new Date().toISOString().slice(0,10);
 
+  const h = data.hourly;
+  // best_match liefert bei models=... nur gesuffixte Felder; auf die Basis-Keys zurücklegen
+  Object.keys(h).forEach(key => {
+    if (key.endsWith('_best_match')) h[key.replace('_best_match', '')] = h[key];
+  });
+
   // filter hourly entries within chosen date + window
-  const times = data.hourly.time;
+  const times = h.time;
   const idxs = [];
   for (let i=0;i<times.length;i++){
     const t = times[i]; // "YYYY-MM-DDTHH:MM"
     const d = t.slice(0,10);
-    const h = t.slice(11,16);
-    if (d === chosenDate && h >= vonH && h <= bisH) idxs.push(i);
+    const hh = t.slice(11,16);
+    if (d === chosenDate && hh >= vonH && hh <= bisH) idxs.push(i);
   }
 
   document.getElementById('resultOrt').textContent = `${selectedPlace.name} — ${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`;
@@ -696,32 +1041,50 @@ function renderResults(data) {
   liveBadge.style.display = isToday ? 'inline-block' : 'none';
   document.getElementById('updatedNote').textContent = 'Abgerufen: ' + new Date().toLocaleString('de-AT');
 
+  const periodBox = document.getElementById('periodBox');
+
   if (!idxs.length) {
     document.getElementById('metricGrid').innerHTML = '';
     document.getElementById('hoursTable').innerHTML = '';
+    periodBox.innerHTML = '';
     setVerdict('a','Keine Daten für dieses Fenster','Für den gewählten Zeitraum liegen keine Stundenwerte vor. Bitte Datum oder Zeitfenster prüfen (Vorschau reicht 16 Tage voraus).');
     resultsEl.style.display = 'block';
     return;
   }
 
+  // Modellvergleich: Streuung von Temperatur/Niederschlag/Wind über die 5 Einzelmodelle
+  const confidence = calculateModelConfidence(h, idxs);
+
   // aggregate
   let maxPrecipProb=0, sumPrecip=0, maxGust=0, minTemp=999, maxTemp=-999, worstCode=0, avgCloud=0;
+  let claefUsed = false;
   const rows = idxs.map(i => {
-    const code = data.hourly.weathercode[i];
-    const prob = data.hourly.precipitation_probability[i];
-    const mm = data.hourly.precipitation[i];
-    const gust = data.hourly.windgusts_10m[i];
-    const temp = data.hourly.temperature_2m[i];
-    const cloud = data.hourly.cloudcover[i];
-    maxPrecipProb = Math.max(maxPrecipProb, prob);
+    const code = h.weather_code[i];
+    const prob = h.precipitation_probability ? h.precipitation_probability[i] : null;
+    let mm = h.precipitation[i];
+    let gust = h.wind_gusts_10m[i];
+    const temp = h.temperature_2m[i];
+    const cloud = h.cloud_cover[i];
+
+    // C-LAEF AlpeAdria (1km, GeoSphere): verfeinert Niederschlag und Windböen, wo verfügbar
+    let claefFlag = false;
+    const claef = claefLookup(claefMap, h.time[i]);
+    if (claef) {
+      if (claef.rain !== undefined) { mm = claef.rain; claefFlag = true; }
+      if (claef.gust !== undefined) { gust = claef.gust; claefFlag = true; }
+      if (claefFlag) claefUsed = true;
+    }
+
+    maxPrecipProb = Math.max(maxPrecipProb, prob ?? 0);
     sumPrecip += mm;
     maxGust = Math.max(maxGust, gust);
     minTemp = Math.min(minTemp, temp);
     maxTemp = Math.max(maxTemp, temp);
     avgCloud += cloud;
     if (code >= 95) worstCode = Math.max(worstCode, code);
-    const status = hourStatus(prob, mm, gust, code);
-    return { time: data.hourly.time[i].slice(11,16), temp, cloud, prob, mm, gust, code, status };
+    const status = hourStatus(prob ?? 0, mm, gust, code);
+    const riskScore = (prob ?? 0) + mm * 15 + gust * 0.6 + (code >= 95 ? 60 : 0);
+    return { time: h.time[i].slice(11,16), temp, cloud, prob, mm, gust, code, status, riskScore, claefFlag };
   });
   avgCloud = Math.round(avgCloud / rows.length);
 
@@ -734,9 +1097,9 @@ function renderResults(data) {
   addMetric(metricGrid, 'Niederschlag gesamt', `${sumPrecip.toFixed(1)} mm`, sumPrecip>=1);
   addMetric(metricGrid, 'Windböen (max.)', `${Math.round(maxGust)} km/h`, maxGust>=50);
   addMetric(metricGrid, 'Gewitterrisiko', worstCode>=95 ? 'vorhanden' : 'keines', worstCode>=95);
+  addMetric(metricGrid, 'Prognose-Verlässlichkeit', confidence.pct != null ? `${confidence.pct} %` : '–', confidence.pct != null && confidence.pct < 60);
 
-  // table
-  const table = document.getElementById('hoursTable');
+  // bester zusammenhängender Zeitraum (status 'g')
   let bestStart = -1, bestLen = 0, curStart=-1, curLen=0;
   rows.forEach((r,i) => {
     if (r.status==='g') { if(curStart===-1) curStart=i; curLen++; }
@@ -744,23 +1107,64 @@ function renderResults(data) {
   });
   if (curLen>bestLen){bestLen=curLen;bestStart=curStart;}
 
+  // kritischster Zeitraum: längster zusammenhängender 'r'-Block, sonst 'a'-Block, sonst einzelne Risiko-Spitze
+  function longestRun(statuses) {
+    let s=-1, l=0, cs=-1, cl=0;
+    rows.forEach((r,i) => {
+      if (statuses.includes(r.status)) { if(cs===-1) cs=i; cl++; }
+      else { if (cl>l){l=cl;s=cs;} cs=-1; cl=0; }
+    });
+    if (cl>l){l=cl;s=cs;}
+    return { start:s, len:l };
+  }
+  let worst = longestRun(['r']);
+  if (worst.len === 0) worst = longestRun(['a']);
+  let worstPeakIdx = -1;
+  if (worst.len === 0) {
+    rows.forEach((r,i) => { if (worstPeakIdx===-1 || r.riskScore > rows[worstPeakIdx].riskScore) worstPeakIdx = i; });
+  }
+
+  // table
+  const table = document.getElementById('hoursTable');
   let html = '<tr><th>Uhrzeit</th><th></th><th>Wetter</th><th>Temp.</th><th>Wolken</th><th>Regen%</th><th>mm</th><th>Böen</th></tr>';
   rows.forEach((r,i) => {
     const [label] = weatherCodeInfo(r.code);
     const dotClass = r.status;
-    const rowClass = (bestStart!==-1 && i>=bestStart && i<bestStart+bestLen) ? 'best' : (r.status==='r' ? 'risk' : '');
+    const inBest = bestStart!==-1 && i>=bestStart && i<bestStart+bestLen;
+    const inWorst = worst.start!==-1 && i>=worst.start && i<worst.start+worst.len;
+    const rowClass = inBest ? 'best' : (inWorst || i===worstPeakIdx ? 'risk' : '');
     html += `<tr class="${rowClass}">
       <td>${r.time}</td>
       <td><span class="dot ${dotClass}"></span></td>
       <td>${label}</td>
       <td>${Math.round(r.temp)}°C</td>
       <td>${r.cloud}%</td>
-      <td>${r.prob}%</td>
-      <td>${r.mm.toFixed(1)}</td>
-      <td>${Math.round(r.gust)} km/h</td>
+      <td>${r.prob != null ? r.prob + '%' : '–'}</td>
+      <td>${r.mm.toFixed(1)}${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
+      <td>${Math.round(r.gust)} km/h${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
     </tr>`;
   });
   table.innerHTML = html;
+
+  // Bester / kritischster Zeitraum als eigene Zeilen
+  let periodHtml = '';
+  if (bestLen > 0) {
+    periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr</div>`;
+  } else {
+    periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> im Fenster keine durchgehend unkritische Phase erkennbar</div>`;
+  }
+  if (worst.len > 0) {
+    periodHtml += `<div class="period-line bad"><span class="dot r"></span><strong>Kritischster Zeitraum:</strong> ${rows[worst.start].time}–${rows[worst.start+worst.len-1].time} Uhr</div>`;
+  } else if (worstPeakIdx !== -1 && rows[worstPeakIdx].riskScore > 5) {
+    periodHtml += `<div class="period-line bad"><span class="dot a"></span><strong>Kritischster Zeitpunkt:</strong> ${rows[worstPeakIdx].time} Uhr (im Vergleich die ungünstigste Stunde im Fenster)</div>`;
+  } else {
+    periodHtml += `<div class="period-line bad"><span class="dot g"></span><strong>Kritischster Zeitraum:</strong> keiner – das ganze Fenster liegt im unkritischen Bereich</div>`;
+  }
+  periodHtml += `<div class="period-line conf"><strong>Modellvergleich (best_match, ICON-D2, ECMWF IFS, GFS, AROME Austria, AROME France):</strong> ${confidence.text}</div>`;
+  if (claefUsed) {
+    periodHtml += `<div class="period-line conf">¹ Niederschlag und Windböen für die markierten Stunden verfeinert durch <strong>C-LAEF AlpeAdria</strong> (GeoSphere Austria, 1&nbsp;km, nur nächste ca. 60&nbsp;Std.).</div>`;
+  }
+  periodBox.innerHTML = periodHtml;
 
   // verdict
   if (worstCode >= 95 || maxPrecipProb >= 60 || sumPrecip >= 2 || maxGust >= 55) {
@@ -779,6 +1183,37 @@ function renderResults(data) {
   }
 
   resultsEl.style.display = 'block';
+}
+
+// Streuung der 5 Einzelmodelle (ohne best_match) über Temperatur/Niederschlag/Wind je Stunde im Fenster
+const COMPARE_MODELS = ['icon_d2','ecmwf_ifs04','gfs_seamless','geosphere_arome_austria','arome_france'];
+function modelValues(h, feld, idx) {
+  return COMPARE_MODELS.map(m => h[`${feld}_${m}`]?.[idx]).filter(v => typeof v === 'number' && Number.isFinite(v));
+}
+function calculateModelConfidence(h, idxs) {
+  let totalScore = 0, validHours = 0;
+  idxs.forEach(idx => {
+    const span = a => a.length > 1 ? (Math.max(...a) - Math.min(...a)) : 0;
+    const temps = modelValues(h, 'temperature_2m', idx);
+    const rains = modelValues(h, 'precipitation', idx);
+    const winds = modelValues(h, 'wind_speed_10m', idx);
+    const tempDiff = span(temps), rainDiff = span(rains), windDiff = span(winds);
+    const tempScore = Math.max(0, 100 - (Math.max(0, tempDiff - 1.5) * 15));
+    const rainScore = Math.max(0, 100 - (Math.max(0, rainDiff - 0.5) * 12));
+    const windScore = Math.max(0, 100 - (Math.max(0, windDiff - 10) * 2));
+    if (temps.length > 1 || rains.length > 1 || winds.length > 1) {
+      totalScore += (tempScore * 0.3) + (rainScore * 0.4) + (windScore * 0.3);
+      validHours++;
+    }
+  });
+  if (validHours === 0) {
+    return { pct: null, text: 'Es liegen keine Vergleichsdaten weiterer Modelle vor.' };
+  }
+  const finalPct = Math.round(totalScore / validHours);
+  let text = 'Sehr gute Modellübereinstimmung für diesen Zeitraum.';
+  if (finalPct < 80) text = 'Leichte Unsicherheiten in der Prognose (Modelle weichen etwas ab).';
+  if (finalPct < 60) text = 'Hohe Unsicherheit: Die Modelle sind sich uneinig, der ungünstigste Fall ist real möglich.';
+  return { pct: finalPct, text: text };
 }
 
 function addMetric(grid, label, value, flag) {
@@ -806,6 +1241,76 @@ function formatDate(iso) {
 function isInAustria(lat, lon) {
   return lat >= 46.3 && lat <= 49.2 && lon >= 9.3 && lon <= 17.3;
 }
+
+// C-LAEF AlpeAdria (GeoSphere nwp-v2-1h-1km): hochauflösendes 1km-Modell, deckt nur
+// die nächsten ca. 60 Stunden ab. Wird NUR für Niederschlag und Wind (Böen) als
+// Verfeinerung der Open-Meteo-Werte verwendet, wo verfügbar - unsichtbar im
+// Hintergrund, außer einer kleinen Kennzeichnung in der Tabelle. Schlägt der Abruf
+// fehl, bleiben einfach die Open-Meteo-Werte unverändert (map bleibt null).
+async function fetchClaefHourlyMap(lat, lon) {
+  try {
+    const params = '10u,10v,10fg,rain';
+    const url = 'https://dataset.api.hub.geosphere.at/v1/timeseries/forecast/nwp-v2-1h-1km?lat_lon=' +
+      encodeURIComponent(lat.toFixed(5) + ',' + lon.toFixed(5)) +
+      '&parameters=' + params + '&output_format=geojson';
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const f = data?.features?.[0];
+    if (!f) return null;
+    const times = geoSphereTimestamps(data, f);
+    if (!times.length) return null;
+    const us = geoSphereValues(f, '10u');
+    const vs = geoSphereValues(f, '10v');
+    const gusts = geoSphereValues(f, '10fg');
+    const rains = geoSphereValues(f, 'rain');
+    const map = new Map();
+    times.forEach((t, i) => {
+      const hourEpoch = Math.floor(new Date(t).getTime() / 3600000);
+      const u = us[i], v = vs[i];
+      const entry = {
+        gust: Number.isFinite(gusts[i]) ? gusts[i] * 3.6 : undefined,
+        rain: Number.isFinite(rains[i]) ? rains[i] : undefined,
+        wind: (Number.isFinite(u) && Number.isFinite(v)) ? Math.sqrt(u * u + v * v) * 3.6 : undefined
+      };
+      if (entry.gust !== undefined || entry.rain !== undefined) map.set(hourEpoch, entry);
+    });
+    return map.size ? map : null;
+  } catch (e) {
+    return null;
+  }
+}
+function claefLookup(map, isoTime) {
+  if (!map) return null;
+  const hourEpoch = Math.floor(new Date(isoTime).getTime() / 3600000);
+  return map.get(hourEpoch) || null;
+}
+function geoSphereTimestamps(data, feature) {
+  const top = data?.timestamps || data?.time || data?.times;
+  if (Array.isArray(top) && top.length) return top;
+  const props = feature?.properties;
+  const inProps = props?.timestamps || props?.time || props?.times;
+  if (Array.isArray(inProps) && inProps.length) return inProps;
+  const params = props?.parameters || {};
+  for (const key of Object.keys(params)) {
+    const p = params[key];
+    const t = p?.timestamps || p?.time || p?.times;
+    if (Array.isArray(t) && t.length) return t;
+  }
+  return [];
+}
+function geoSphereValues(feature, param) {
+  const params = feature?.properties?.parameters;
+  if (!params) return [];
+  const keys = Object.keys(params);
+  const entry = params[param] || params[param.toUpperCase()] || params[param.toLowerCase()]
+    || (keys.length === 1 ? params[keys[0]] : null);
+  const data = entry?.data;
+  if (!Array.isArray(data)) return [];
+  if (data.length && Array.isArray(data[0])) return [];
+  return data;
+}
+
 
 const RING_DIRECTIONS = [
   { deg: 0,   label: 'Norden' },
