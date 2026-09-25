@@ -147,6 +147,30 @@
   }
   .suggestions button:hover{background:var(--bg);}
 
+  .multiday-row{
+    margin-top:16px;
+    display:flex;
+    align-items:flex-end;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  .checkbox-label{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13.5px;
+    color:var(--ink);
+    cursor:pointer;
+    padding-bottom:11px;
+  }
+  .checkbox-label input[type=checkbox]{
+    width:16px;
+    height:16px;
+    accent-color:var(--ink);
+    cursor:pointer;
+  }
+  #enddatumWrap{flex:1;min-width:160px;}
+
   .mode-toggle{
     display:flex;
     gap:8px;
@@ -489,38 +513,41 @@
     flex-wrap:wrap;
     margin-top:4px;
   }
-  .event-row{
+  .event-select-row{
     display:flex;
+    gap:8px;
+    flex-wrap:wrap;
     align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    padding:11px 0;
-    border-bottom:1px solid var(--line);
-    font-size:13.5px;
   }
-  .event-row:last-child{border-bottom:none;}
-  .event-row .event-info strong{
-    font-family:'Fraunces',serif;
-    font-weight:500;
-    display:block;
-    font-size:14.5px;
+  .event-select-row select{
+    flex:1;
+    min-width:180px;
+    padding:11px 12px;
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:#fff;
+    font-family:inherit;
+    font-size:14px;
+    color:var(--ink);
   }
-  .event-row .event-info span{color:var(--muted);font-size:12.5px;}
-  .event-row .event-btns{display:flex;gap:8px;flex-shrink:0;}
-  .event-row button{
+  .event-select-row select:focus{outline:1.5px solid var(--ink);outline-offset:1px;}
+  .event-select-btns{display:flex;gap:8px;}
+  .event-select-btns button{
     font-family:'Fraunces',serif;
     font-size:11px;
     font-weight:500;
     letter-spacing:.05em;
     text-transform:uppercase;
     border-radius:999px;
-    padding:6px 13px;
+    padding:10px 15px;
     cursor:pointer;
+    white-space:nowrap;
   }
-  .event-row .load-btn{background:none;border:1px solid var(--ink);color:var(--ink);}
-  .event-row .load-btn:hover{background:var(--ink);color:var(--cream-on-dark);}
-  .event-row .delete-btn{background:none;border:1px solid var(--risk);color:var(--risk);}
-  .event-row .delete-btn:hover{background:var(--risk);color:#fff;}
+  .event-select-btns button:disabled{opacity:.4;cursor:default;}
+  .event-select-btns .load-btn{background:none;border:1px solid var(--ink);color:var(--ink);}
+  .event-select-btns .load-btn:hover:not(:disabled){background:var(--ink);color:var(--cream-on-dark);}
+  .event-select-btns .delete-btn{background:none;border:1px solid var(--risk);color:var(--risk);}
+  .event-select-btns .delete-btn:hover:not(:disabled){background:var(--risk);color:#fff;}
   .events-empty{font-size:13.5px;color:var(--muted);padding:6px 0;}
 </style>
 </head>
@@ -554,7 +581,15 @@
     </div>
 
     <div id="eventsArea" style="display:none;">
-      <div id="eventsList"></div>
+      <div class="event-select-row">
+        <select id="eventSelect">
+          <option value="">– Event wählen –</option>
+        </select>
+        <div class="event-select-btns">
+          <button type="button" id="loadEventBtn" class="load-btn" disabled>Laden</button>
+          <button type="button" id="deleteEventBtn" class="delete-btn" disabled>Löschen</button>
+        </div>
+      </div>
       <div class="field-row time-row" style="margin-top:16px;">
         <div style="grid-column:1/-1;">
           <label for="eventName">Aktuelles Event speichern als</label>
@@ -591,6 +626,16 @@
         <input type="date" id="datum">
       </div>
     </div>
+    <div class="multiday-row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="multiday">
+        Mehrtägiges Event
+      </label>
+      <div id="enddatumWrap" style="display:none;">
+        <label for="enddatum">Enddatum</label>
+        <input type="date" id="enddatum">
+      </div>
+    </div>
     <div class="field-row time-row" style="margin-top:18px;">
       <div>
         <label for="von">Zeitfenster von</label>
@@ -601,6 +646,7 @@
         <input type="time" id="bis" value="19:00">
       </div>
     </div>
+    <p class="map-hint" style="margin-top:6px;" id="timeHint">Liegt „bis" zeitlich vor „von", läuft das Fenster automatisch bis zu dieser Uhrzeit am nächsten Tag weiter.</p>
     <button class="submit-btn" id="checkBtn">Wetter prüfen</button>
     <div class="status-line" id="statusLine"></div>
   </div>
@@ -625,8 +671,6 @@
 
       <div class="period-box" id="periodBox"></div>
 
-      <div class="precip-warning" id="precipWarning" style="display:none;"></div>
-
       <a href="#" id="radarLink" class="radar-link" target="_blank" rel="noopener" style="display:none;">🌧️ Regenradar auf Windy öffnen (für diesen Ort)</a>
 
       <div class="table-wrap">
@@ -643,6 +687,7 @@
       <h2>Live-Nowcast (GeoSphere Austria)</h2>
       <div class="sub" id="liveSub">Messwerte und 15-Minuten-Nowcast für den genauen Punkt.</div>
       <div class="live-grid" id="liveGrid"></div>
+      <div class="precip-warning" id="precipWarning" style="display:none;"></div>
     </div>
 
     <div class="method-box" id="methodBox" style="display:none;"></div>
@@ -659,6 +704,9 @@ const suggBox = document.getElementById('suggestions');
 const datumInput = document.getElementById('datum');
 const vonInput = document.getElementById('von');
 const bisInput = document.getElementById('bis');
+const multidayCheckbox = document.getElementById('multiday');
+const enddatumWrap = document.getElementById('enddatumWrap');
+const enddatumInput = document.getElementById('enddatum');
 const checkBtn = document.getElementById('checkBtn');
 const statusLine = document.getElementById('statusLine');
 const resultsEl = document.getElementById('results');
@@ -703,7 +751,9 @@ try {
   const loginBtn = document.getElementById('loginBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const loggedInAs = document.getElementById('loggedInAs');
-  const eventsList = document.getElementById('eventsList');
+  const eventSelect = document.getElementById('eventSelect');
+  const loadEventBtn = document.getElementById('loadEventBtn');
+  const deleteEventBtn = document.getElementById('deleteEventBtn');
   const eventName = document.getElementById('eventName');
   const saveEventBtn = document.getElementById('saveEventBtn');
   const eventsStatus = document.getElementById('eventsStatus');
@@ -736,36 +786,51 @@ auth.onAuthStateChanged((user) => {
   }
 });
 
+let eventsCache = {}; // id -> Eventdaten, für Dropdown-Auswahl
+
 async function loadEvents() {
-  eventsList.innerHTML = '<div class="events-empty">Lädt …</div>';
+  eventSelect.innerHTML = '<option value="">Lädt …</option>';
+  loadEventBtn.disabled = true;
+  deleteEventBtn.disabled = true;
+  eventsCache = {};
   try {
     const snap = await db.collection('events').orderBy('datum').get();
-    if (snap.empty) {
-      eventsList.innerHTML = '<div class="events-empty">Noch keine Events gespeichert.</div>';
-      return;
-    }
-    eventsList.innerHTML = '';
+    eventSelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = snap.empty ? 'Keine gespeicherten Events' : '– Event wählen –';
+    eventSelect.appendChild(placeholder);
     snap.forEach(doc => {
       const ev = doc.data();
-      const row = document.createElement('div');
-      row.className = 'event-row';
-      row.innerHTML = `
-        <div class="event-info">
-          <strong>${ev.name || '(ohne Namen)'}</strong>
-          <span>${ev.ortName || ''} — ${ev.datum || ''}${ev.von ? ', ' + ev.von + '–' + ev.bis + ' Uhr' : ''}</span>
-        </div>
-        <div class="event-btns">
-          <button type="button" class="load-btn">Laden</button>
-          <button type="button" class="delete-btn">Löschen</button>
-        </div>`;
-      row.querySelector('.load-btn').addEventListener('click', () => loadEventIntoForm(ev));
-      row.querySelector('.delete-btn').addEventListener('click', () => deleteEvent(doc.id, ev.name));
-      eventsList.appendChild(row);
+      eventsCache[doc.id] = ev;
+      const opt = document.createElement('option');
+      opt.value = doc.id;
+      const zeit = ev.von ? `, ${ev.von}–${ev.bis} Uhr` : '';
+      const datumLabel = ev.enddatum && ev.enddatum !== ev.datum ? `${ev.datum} – ${ev.enddatum}` : (ev.datum || '');
+      opt.textContent = `${ev.name || '(ohne Namen)'} — ${ev.ortName || ''} — ${datumLabel}${zeit}`;
+      eventSelect.appendChild(opt);
     });
   } catch (e) {
-    eventsList.innerHTML = '<div class="events-empty">Events konnten nicht geladen werden.</div>';
+    eventSelect.innerHTML = '<option value="">Events konnten nicht geladen werden</option>';
   }
 }
+
+eventSelect.addEventListener('change', () => {
+  const has = !!eventSelect.value;
+  loadEventBtn.disabled = !has;
+  deleteEventBtn.disabled = !has;
+});
+
+loadEventBtn.addEventListener('click', () => {
+  const ev = eventsCache[eventSelect.value];
+  if (ev) loadEventIntoForm(ev);
+});
+
+deleteEventBtn.addEventListener('click', () => {
+  const id = eventSelect.value;
+  const ev = eventsCache[id];
+  if (id) deleteEvent(id, ev && ev.name);
+});
 
 function loadEventIntoForm(ev) {
   selectedPlace = { name: ev.ortName, lat: ev.lat, lon: ev.lon };
@@ -773,6 +838,16 @@ function loadEventIntoForm(ev) {
   if (ev.datum) datumInput.value = ev.datum;
   if (ev.von) vonInput.value = ev.von;
   if (ev.bis) bisInput.value = ev.bis;
+  if (ev.enddatum) {
+    multidayCheckbox.checked = true;
+    enddatumWrap.style.display = 'block';
+    enddatumInput.value = ev.enddatum;
+    syncEnddatumBounds();
+  } else {
+    multidayCheckbox.checked = false;
+    enddatumWrap.style.display = 'none';
+    enddatumInput.value = '';
+  }
   document.querySelector('.panel:not(#eventsPanel)').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -807,6 +882,7 @@ saveEventBtn.addEventListener('click', async () => {
       lat: selectedPlace.lat,
       lon: selectedPlace.lon,
       datum: datumInput.value,
+      enddatum: (multidayCheckbox.checked && enddatumInput.value) ? enddatumInput.value : null,
       von: vonInput.value,
       bis: bisInput.value,
       createdBy: auth.currentUser.email,
@@ -832,6 +908,36 @@ datumInput.value = today.toISOString().slice(0,10);
 datumInput.min = today.toISOString().slice(0,10);
 const maxDate = new Date(today.getTime() + 15*86400000);
 datumInput.max = maxDate.toISOString().slice(0,10);
+enddatumInput.max = maxDate.toISOString().slice(0,10);
+
+// Mehrtägiges Event: Checkbox blendet das Enddatum-Feld ein/aus. Enddatum darf
+// nicht vor dem Startdatum liegen; Vorgabe beim ersten Aktivieren = Startdatum.
+function syncEnddatumBounds() {
+  enddatumInput.min = datumInput.value;
+  if (enddatumInput.value && enddatumInput.value < datumInput.value) {
+    enddatumInput.value = datumInput.value;
+  }
+}
+syncEnddatumBounds();
+datumInput.addEventListener('change', syncEnddatumBounds);
+
+multidayCheckbox.addEventListener('change', () => {
+  if (multidayCheckbox.checked) {
+    enddatumWrap.style.display = 'block';
+    if (!enddatumInput.value) enddatumInput.value = datumInput.value;
+    syncEnddatumBounds();
+  } else {
+    enddatumWrap.style.display = 'none';
+  }
+});
+
+// default Zeitfenster: aktuelle Uhrzeit bis +6 Std. (nur solange nichts geändert wurde).
+// Reicht das über Mitternacht hinaus, läuft "bis" einfach in den nächsten Tag weiter -
+// das Event geht ja weiter; die Auswertung erkennt das automatisch (siehe renderResults).
+function pad2(n) { return String(n).padStart(2,'0'); }
+vonInput.value = `${pad2(today.getHours())}:${pad2(today.getMinutes())}`;
+const bisDt = new Date(today.getTime() + 6*3600000);
+bisInput.value = `${pad2(bisDt.getHours())}:${pad2(bisDt.getMinutes())}`;
 
 ortInput.addEventListener('input', () => {
   selectedPlace = null;
@@ -1065,10 +1171,22 @@ async function runCheck() {
     statusLine.className='status-line err';
     return;
   }
-  if (vonInput.value >= bisInput.value) {
-    statusLine.textContent = 'Das Ende des Zeitfensters muss nach dem Beginn liegen.';
+  if (vonInput.value === bisInput.value) {
+    statusLine.textContent = 'Start und Ende des Zeitfensters dürfen nicht gleich sein.';
     statusLine.className='status-line err';
     return;
+  }
+  if (multidayCheckbox.checked) {
+    if (!enddatumInput.value) {
+      statusLine.textContent = 'Bitte ein Enddatum für das mehrtägige Event angeben.';
+      statusLine.className='status-line err';
+      return;
+    }
+    if (enddatumInput.value < datumInput.value) {
+      statusLine.textContent = 'Das Enddatum darf nicht vor dem Startdatum liegen.';
+      statusLine.className='status-line err';
+      return;
+    }
   }
 
   checkBtn.disabled = true;
@@ -1121,17 +1239,32 @@ function renderResults(data, claefMap) {
     if (key.endsWith('_best_match')) h[key.replace('_best_match', '')] = h[key];
   });
 
+  // Zeitfenster-Ende bestimmen: entweder explizit gewähltes Enddatum (mehrtägiges
+  // Event) oder - falls "bis" zeitlich vor "von" liegt - automatisch der nächste
+  // Kalendertag. Der Vergleich läuft rein über die ISO-Zeitstrings (sortieren
+  // chronologisch korrekt), das deckt Übernacht- wie Mehrtages-Fenster gleich ab.
+  const isMultiday = multidayCheckbox.checked && !!enddatumInput.value;
+  const endDate = isMultiday
+    ? enddatumInput.value
+    : (bisH < vonH
+        ? new Date(new Date(chosenDate + 'T00:00:00').getTime() + 86400000).toISOString().slice(0,10)
+        : chosenDate);
+  const spansMultipleDays = endDate !== chosenDate;
+  const startStr = `${chosenDate}T${vonH}`;
+  const endStr = `${endDate}T${bisH}`;
+
   // filter hourly entries within chosen date + window
   const times = h.time;
   const idxs = [];
   for (let i=0;i<times.length;i++){
     const t = times[i]; // "YYYY-MM-DDTHH:MM"
-    const d = t.slice(0,10);
-    const hh = t.slice(11,16);
-    if (d === chosenDate && hh >= vonH && hh <= bisH) idxs.push(i);
+    if (t >= startStr && t <= endStr) idxs.push(i);
   }
 
-  document.getElementById('resultOrt').textContent = `${selectedPlace.name} — ${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`;
+  const windowLabel = spansMultipleDays
+    ? `${formatDate(chosenDate)}, ${vonH} Uhr – ${formatDate(endDate)}, ${bisH} Uhr`
+    : `${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`;
+  document.getElementById('resultOrt').textContent = `${selectedPlace.name} — ${windowLabel}`;
   const liveBadge = document.getElementById('liveBadge');
   liveBadge.style.display = isToday ? 'inline-block' : 'none';
   document.getElementById('updatedNote').textContent = 'Abgerufen: ' + new Date().toLocaleString('de-AT');
@@ -1181,7 +1314,11 @@ function renderResults(data, claefMap) {
     if (code >= 95) worstCode = Math.max(worstCode, code);
     const status = hourStatus(prob ?? 0, mm, gust, code);
     const riskScore = (prob ?? 0) + mm * 15 + gust * 0.6 + (code >= 95 ? 60 : 0);
-    return { time: h.time[i].slice(11,16), temp, cloud, prob, mm, gust, code, status, riskScore, claefFlag };
+    const dateStr = h.time[i].slice(0,10);
+    const timeLabel = spansMultipleDays
+      ? `${dateStr.slice(8,10)}.${dateStr.slice(5,7)}. ${h.time[i].slice(11,16)}`
+      : h.time[i].slice(11,16);
+    return { time: timeLabel, temp, cloud, prob, mm, gust, code, status, riskScore, claefFlag };
   });
   avgCloud = Math.round(avgCloud / rows.length);
 
