@@ -13,10 +13,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Firebase (Team-Login + Events-Speicherung). Config unten im Script eintragen. -->
+<!-- Firebase (Code-Sperre + Events-Speicherung + Regen-Push). Config unten im Script eintragen. -->
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js"></script>
 <style>
   /* Palette & Type nach cc-events.at: warmes Creme/Taupe, Schwarz, editoriale
      Versal-Serife mit Sperrung für Überschriften, ruhige, matte Statusfarben
@@ -109,7 +110,7 @@
     color:var(--muted);
     margin-bottom:7px;
   }
-  input[type=text],input[type=date],input[type=time]{
+  input[type=text],input[type=date],input[type=time],input[type=password],input[type=email]{
     width:100%;
     padding:11px 12px;
     border:1px solid var(--line);
@@ -495,6 +496,19 @@
     margin:0 0 14px;
   }
   .auth-hint{font-size:13.5px;color:var(--muted);margin:0 0 14px;}
+  .push-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    margin-top:18px;
+    padding-top:16px;
+    border-top:1px solid var(--line);
+  }
+  .push-title{font-size:12.5px;font-weight:600;letter-spacing:.04em;color:var(--ink);margin:0 0 3px;}
+  .push-hint{font-size:12.5px;color:var(--muted);margin:0;line-height:1.4;}
+  .push-row .text-btn{white-space:nowrap;flex-shrink:0;}
+  .push-row .text-btn.active{color:var(--good);}
   .submit-btn.small{margin-top:14px;padding:10px 22px;font-size:12px;}
   .text-btn{
     background:none;
@@ -595,9 +609,61 @@
   .confirm-cancel:hover{background:var(--ink);color:var(--cream-on-dark);}
   .confirm-ok{background:var(--risk);border:1px solid var(--risk);color:#fff;}
   .confirm-ok:hover{background:#7c4536;}
+
+  .lock-overlay{
+    position:fixed;
+    inset:0;
+    background:var(--bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    z-index:2000;
+  }
+  .lock-box{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:38px 30px 30px;
+    max-width:360px;
+    width:100%;
+    text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.12);
+  }
+  .lock-logo{max-height:38px;width:auto;margin:0 auto 18px;display:block;}
+  .lock-title{
+    font-family:'Fraunces',serif;
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:.02em;
+    color:var(--ink);
+    margin:0 0 6px;
+  }
+  .lock-hint{font-size:13.5px;color:var(--muted);margin:0 0 20px;}
+  .lock-box input[type=password],.lock-box input[type=email]{
+    margin-bottom:12px;
+  }
+  .lock-box label{text-align:left;}
+  .lock-box .submit-btn{width:100%;}
 </style>
 </head>
 <body>
+
+<div id="lockOverlay" class="lock-overlay">
+  <div class="lock-box">
+    <img src="Firmenlogo.png" alt="" class="lock-logo">
+    <p class="lock-title">Event Wetter</p>
+    <p class="lock-hint">Bitte anmelden.</p>
+    <label for="lockEmailInput">E-Mail</label>
+    <input type="email" id="lockEmailInput" autocomplete="username">
+    <label for="lockCodeInput">Passwort</label>
+    <input type="password" id="lockCodeInput" autocomplete="current-password">
+    <button type="button" class="submit-btn" id="lockSubmitBtn">Anmelden</button>
+    <div class="status-line" id="lockStatus"></div>
+  </div>
+</div>
+
+<div id="appContent" style="display:none;">
 
 <div class="eyebrow">cc-events.at</div>
 <header>
@@ -610,19 +676,7 @@
   <div class="panel" id="eventsPanel">
     <h2 class="panel-h2">Gespeicherte Events</h2>
 
-    <div id="authGate">
-      <p class="auth-hint">Team-Code eingeben, um Events zu speichern, zu laden und zu löschen.</p>
-      <div class="field-row time-row">
-        <div style="grid-column:1/-1;">
-          <label for="loginPassword">Team-Code</label>
-          <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Code eingeben">
-        </div>
-      </div>
-      <button type="button" class="submit-btn small" id="loginBtn">Anmelden</button>
-      <div class="status-line" id="loginStatus"></div>
-    </div>
-
-    <div id="eventsArea" style="display:none;">
+    <div id="eventsArea">
       <div class="event-select-row">
         <select id="eventSelect">
           <option value="">– Event wählen –</option>
@@ -640,9 +694,18 @@
       </div>
       <div class="events-actions">
         <button type="button" class="submit-btn small" id="saveEventBtn">Event speichern</button>
-        <button type="button" class="text-btn" id="logoutBtn">Abmelden<span id="loggedInAs"></span></button>
+        <button type="button" class="text-btn" id="lockAgainBtn">Abmelden</button>
       </div>
       <div class="status-line" id="eventsStatus"></div>
+
+      <div class="push-row">
+        <div>
+          <p class="push-title">Regen-Frühwarnung</p>
+          <p class="push-hint">Push-Benachrichtigung, sobald der Live-Nowcast Niederschlag im 20&#8209;km-Umkreis des aktuellen Events erkennt &#8211; mit Entfernung, Eintreffzeit und Hinweis auf hohe Intensität.</p>
+        </div>
+        <button type="button" class="text-btn" id="pushToggleBtn" disabled>Push aktivieren</button>
+      </div>
+      <div class="status-line" id="pushStatus"></div>
     </div>
   </div>
 
@@ -740,6 +803,8 @@
   Einschätzung als Orientierung, keine Garantie – bei Gewitterwarnung oder hoher Niederschlagswahrscheinlichkeit rechtzeitig auf die Indoor-Alternative vorbereiten.
 </footer>
 
+</div>
+
 <script>
 const ortInput = document.getElementById('ort');
 const suggBox = document.getElementById('suggestions');
@@ -757,23 +822,48 @@ let selectedPlace = null; // {name, lat, lon}
 let suggestTimer = null;
 
 // =====================================================================
-// FIREBASE: Team-Login + Events speichern/laden/löschen
+// FIREBASE: Login (E-Mail/Passwort) sperrt die ganze App + Events
+// speichern/laden/löschen
 // ---------------------------------------------------------------------
 // WICHTIG: firebaseConfig unten mit den echten Werten aus der Firebase
 // Console ersetzen (Projekteinstellungen → Meine Apps → Web-App → Config).
 // Der apiKey ist NICHT geheim - der Schutz kommt über Firestore-Regeln
 // (nur eingeloggte Team-Accounts dürfen lesen/schreiben) und darüber,
-// dass nur von dir angelegte Accounts sich überhaupt einloggen können.
+// dass nur von dir angelegte Accounts sich überhaupt einloggen können
+// (Firebase Console → Authentication → Users → Add user, pro Team-
+// Mitglied ein eigenes Konto).
+//
 // In ein try/catch gepackt: lädt das Firebase-SDK aus irgendeinem Grund
 // nicht (Netzwerk, Blocker, Offline-Vorschau), bleibt wenigstens der
-// eigentliche Wetter-Check nutzbar, statt dass die ganze Seite abstürzt.
+// eigentliche Wetter-Check nutzbar, statt dass die ganze Seite abstürzt -
+// die Login-Sperre wird dann übersprungen.
 // =====================================================================
-const authGate = document.getElementById('authGate');
-const eventsArea = document.getElementById('eventsArea');
-const loginStatus = document.getElementById('loginStatus');
+const lockOverlay = document.getElementById('lockOverlay');
+const appContent = document.getElementById('appContent');
+const lockEmailInput = document.getElementById('lockEmailInput');
+const lockCodeInput = document.getElementById('lockCodeInput');
+const lockSubmitBtn = document.getElementById('lockSubmitBtn');
+const lockStatus = document.getElementById('lockStatus');
+
+function unlockApp() {
+  lockOverlay.style.display = 'none';
+  appContent.style.display = 'block';
+}
+function showLock(message) {
+  appContent.style.display = 'none';
+  lockOverlay.style.display = 'flex';
+  lockStatus.className = message ? 'status-line err' : 'status-line';
+  lockStatus.textContent = message || '';
+  lockCodeInput.value = '';
+  lockEmailInput.focus();
+}
 
 if (typeof firebase === 'undefined') {
-  authGate.innerHTML = '<p class="auth-hint">Team-Login momentan nicht verfügbar (Firebase konnte nicht geladen werden).</p>';
+  // Kein Firebase verfügbar: App lieber ungeschützt aber nutzbar lassen,
+  // statt sie komplett zu blockieren. Team-Funktionen fallen dann weg.
+  unlockApp();
+  const eventsPanelEl = document.getElementById('eventsPanel');
+  if (eventsPanelEl) eventsPanelEl.innerHTML = '<h2 class="panel-h2">Gespeicherte Events</h2><p class="auth-hint">Team-Funktionen momentan nicht verfügbar (Firebase konnte nicht geladen werden).</p>';
 } else {
 try {
   const firebaseConfig = {
@@ -788,50 +878,187 @@ try {
   const auth = firebase.auth();
   const db = firebase.firestore();
 
-  // Gemeinsamer Team-Zugang: eine einzige Firebase-Auth-Identität, deren
-  // Passwort als "Team-Code" fungiert. Die eigentliche Absicherung passiert
-  // über die Firestore-Regel (nur angemeldete Nutzer dürfen lesen/schreiben).
-  const TEAM_EMAIL = 'team@event-wetter.app';
-  const loginPassword = document.getElementById('loginPassword');
-  const loginBtn = document.getElementById('loginBtn');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const loggedInAs = document.getElementById('loggedInAs');
   const eventSelect = document.getElementById('eventSelect');
   const loadEventBtn = document.getElementById('loadEventBtn');
   const deleteEventBtn = document.getElementById('deleteEventBtn');
   const eventName = document.getElementById('eventName');
   const saveEventBtn = document.getElementById('saveEventBtn');
   const eventsStatus = document.getElementById('eventsStatus');
+  const lockAgainBtn = document.getElementById('lockAgainBtn');
 
-loginBtn.addEventListener('click', async () => {
-  loginStatus.className = 'status-line';
-  loginStatus.textContent = 'Anmeldung läuft …';
-  try {
-    await auth.signInWithEmailAndPassword(TEAM_EMAIL, loginPassword.value);
-    loginStatus.textContent = '';
-  } catch (e) {
-    loginStatus.className = 'status-line err';
-    loginStatus.textContent = 'Anmeldung fehlgeschlagen: falscher Team-Code.';
+  // ---- Regen-Frühwarnung per Push (Firebase Cloud Messaging) --------------
+  // Ein Cronjob (siehe check_rain.py im Repo) prüft regelmäßig den GeoSphere-
+  // Nowcast im 20-km-Umkreis jedes abonnierten Events und schickt bei
+  // Niederschlag eine Push-Benachrichtigung mit Entfernung, Eintreffzeit und
+  // ggf. Hinweis auf hohe Intensität - wie bei der Bergtouren-Wetter-App.
+  // WICHTIG: VAPID_KEY unten mit dem eigenen Web-Push-Zertifikat aus der
+  // Firebase Console ersetzen (Projekteinstellungen -> Cloud Messaging ->
+  // Web-Push-Zertifikate -> Schlüsselpaar generieren).
+  const VAPID_KEY = 'HIER_DEINEN_VAPID_KEY_EINFUEGEN';
+  const pushToggleBtn = document.getElementById('pushToggleBtn');
+  const pushStatus = document.getElementById('pushStatus');
+  let activeEventId = null;
+  let messaging = null;
+  let swRegistration = null;
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./firebase-messaging-sw.js')
+      .then(reg => {
+        swRegistration = reg;
+        try {
+          if (!firebase.messaging.isSupported || firebase.messaging.isSupported()) {
+            messaging = firebase.messaging();
+          }
+        } catch (e) { /* Push in diesem Browser nicht verfügbar */ }
+        // Falls der Login schon vor der SW-Registrierung durchgelaufen ist.
+        if (auth.currentUser) refreshFcmToken();
+      })
+      .catch(e => console.warn('Service Worker für Push konnte nicht registriert werden:', e));
   }
-});
-loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
 
-logoutBtn.addEventListener('click', () => auth.signOut());
-
-auth.onAuthStateChanged((user) => {
-  if (user) {
-    authGate.style.display = 'none';
-    eventsArea.style.display = 'block';
-    loggedInAs.textContent = '';
-    loadEvents();
-  } else {
-    authGate.style.display = 'block';
-    eventsArea.style.display = 'none';
-    loginPassword.value = '';
+  // FCM-Tokens ändern sich regelmäßig (Browser-/OS-Update, neue Installation,
+  // abgelaufener Token) - ohne regelmäßigen Abgleich laufen Pushes irgendwann
+  // ins Leere, ohne dass das auffällt. Bei jedem App-Start (siehe
+  // onAuthStateChanged weiter unten) wird der aktuelle Token geholt und, falls
+  // er sich gegenüber dem zuletzt bekannten geändert hat, in allen Abos
+  // dieses Geräts ersetzt.
+  async function refreshFcmToken() {
+    if (!messaging) return;
+    try {
+      const newToken = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
+      if (!newToken) return;
+      const oldToken = localStorage.getItem('eventWetterFcmToken');
+      if (oldToken && oldToken !== newToken) {
+        const snap = await db.collection('event_subscriptions').where('token', '==', oldToken).get();
+        if (!snap.empty) {
+          const batch = db.batch();
+          snap.forEach(doc => batch.update(doc.ref, { token: newToken }));
+          await batch.commit();
+        }
+      }
+      localStorage.setItem('eventWetterFcmToken', newToken);
+    } catch (e) {
+      // Kein Fehlerfall im engeren Sinn - z.B. wenn noch nie eine Berechtigung
+      // erteilt wurde. Dann bleibt der alte Token (falls vorhanden) einfach stehen.
+    }
   }
-});
 
-let eventsCache = {}; // id -> Eventdaten, für Dropdown-Auswahl
+  async function refreshPushButtonState(id) {
+    activeEventId = id;
+    if (!id) {
+      pushToggleBtn.disabled = true;
+      pushToggleBtn.textContent = 'Push aktivieren';
+      pushToggleBtn.classList.remove('active');
+      return;
+    }
+    pushToggleBtn.disabled = false;
+    try {
+      const snap = await db.collection('event_subscriptions').doc(id).get();
+      const subscribed = snap.exists && !!snap.data().token;
+      pushToggleBtn.textContent = subscribed ? '🔔 Push aktiv – deaktivieren' : 'Push aktivieren';
+      pushToggleBtn.classList.toggle('active', subscribed);
+    } catch (e) {
+      pushToggleBtn.textContent = 'Push aktivieren';
+    }
+  }
+
+  pushToggleBtn.addEventListener('click', async () => {
+    if (!activeEventId) return;
+    pushStatus.className = 'status-line';
+    const isActive = pushToggleBtn.classList.contains('active');
+
+    if (isActive) {
+      pushStatus.textContent = 'Deaktiviere …';
+      try {
+        await db.collection('event_subscriptions').doc(activeEventId).set({ token: null }, { merge: true });
+        pushStatus.textContent = 'Push deaktiviert.';
+        refreshPushButtonState(activeEventId);
+      } catch (e) {
+        pushStatus.className = 'status-line err';
+        pushStatus.textContent = 'Deaktivieren fehlgeschlagen.';
+      }
+      return;
+    }
+
+    if (!messaging) {
+      pushStatus.className = 'status-line err';
+      pushStatus.textContent = 'Push-Benachrichtigungen werden von diesem Browser nicht unterstützt.';
+      return;
+    }
+    const ev = eventsCache[activeEventId];
+    if (!ev) {
+      pushStatus.className = 'status-line err';
+      pushStatus.textContent = 'Bitte das Event zuerst speichern oder aus der Liste laden.';
+      return;
+    }
+
+    pushStatus.textContent = 'Aktiviere …';
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        pushStatus.className = 'status-line err';
+        pushStatus.textContent = 'Benachrichtigungen wurden nicht erlaubt.';
+        return;
+      }
+      const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
+      await db.collection('event_subscriptions').doc(activeEventId).set({
+        eventId: activeEventId,
+        ortName: ev.ortName,
+        lat: ev.lat,
+        lon: ev.lon,
+        datum: ev.datum,
+        enddatum: ev.enddatum || null,
+        von: ev.von,
+        bis: ev.bis,
+        token: token,
+        finished: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      localStorage.setItem('eventWetterFcmToken', token);
+      pushStatus.textContent = 'Regen-Push aktiviert.';
+      refreshPushButtonState(activeEventId);
+    } catch (e) {
+      pushStatus.className = 'status-line err';
+      pushStatus.textContent = 'Aktivieren fehlgeschlagen: ' + (e && e.message ? e.message : e);
+    }
+  });
+
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      unlockApp();
+      loadEvents();
+      refreshFcmToken(); // bei jedem App-Start prüfen, ob sich der FCM-Token geändert hat
+    } else {
+      showLock();
+    }
+  });
+
+  async function submitLogin() {
+    const email = lockEmailInput.value.trim();
+    const password = lockCodeInput.value;
+    if (!email || !password) {
+      lockStatus.className = 'status-line err';
+      lockStatus.textContent = 'Bitte E-Mail und Passwort eingeben.';
+      return;
+    }
+    lockStatus.className = 'status-line';
+    lockStatus.textContent = 'Anmeldung läuft …';
+    lockSubmitBtn.disabled = true;
+    try {
+      await auth.signInWithEmailAndPassword(email, password);
+      lockStatus.textContent = '';
+    } catch (e) {
+      showLock('Anmeldung fehlgeschlagen: falsche Zugangsdaten oder kein Account hinterlegt.');
+    }
+    lockSubmitBtn.disabled = false;
+  }
+  lockSubmitBtn.addEventListener('click', submitLogin);
+  lockCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
+  lockEmailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') lockCodeInput.focus(); });
+
+  lockAgainBtn.addEventListener('click', () => auth.signOut());
+
+  let eventsCache = {}; // id -> Eventdaten, für Dropdown-Auswahl
 
 async function loadEvents() {
   eventSelect.innerHTML = '<option value="">Lädt …</option>';
@@ -867,8 +1094,9 @@ eventSelect.addEventListener('change', () => {
 });
 
 loadEventBtn.addEventListener('click', () => {
-  const ev = eventsCache[eventSelect.value];
-  if (ev) loadEventIntoForm(ev);
+  const id = eventSelect.value;
+  const ev = eventsCache[id];
+  if (ev) loadEventIntoForm(ev, id);
 });
 
 deleteEventBtn.addEventListener('click', () => {
@@ -877,7 +1105,8 @@ deleteEventBtn.addEventListener('click', () => {
   if (id) deleteEvent(id, ev && ev.name);
 });
 
-function loadEventIntoForm(ev) {
+function loadEventIntoForm(ev, id) {
+  refreshPushButtonState(id || null);
   selectedPlace = { name: ev.ortName, lat: ev.lat, lon: ev.lon };
   ortInput.value = ev.ortName || '';
   if (ev.datum) { datumInput.value = ev.datum; datumTouched = true; }
@@ -903,6 +1132,8 @@ async function deleteEvent(id, name) {
   if (!ok) return;
   try {
     await db.collection('events').doc(id).delete();
+    try { await db.collection('event_subscriptions').doc(id).delete(); } catch (e) { /* egal, falls keine Subscription existierte */ }
+    if (activeEventId === id) refreshPushButtonState(null);
     loadEvents();
   } catch (e) {
     eventsStatus.className = 'status-line err';
@@ -924,7 +1155,7 @@ saveEventBtn.addEventListener('click', async () => {
   }
   eventsStatus.textContent = 'Speichert …';
   try {
-    await db.collection('events').add({
+    const docRef = await db.collection('events').add({
       name: eventName.value.trim(),
       ortName: selectedPlace.name,
       lat: selectedPlace.lat,
@@ -933,12 +1164,13 @@ saveEventBtn.addEventListener('click', async () => {
       enddatum: (multidayCheckbox.checked && enddatumInput.value) ? enddatumInput.value : null,
       von: vonInput.value,
       bis: bisInput.value,
-      createdBy: 'Team',
+      createdBy: (auth.currentUser && auth.currentUser.email) || 'Team',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     eventName.value = '';
     eventsStatus.textContent = 'Event gespeichert.';
-    loadEvents();
+    await loadEvents();
+    refreshPushButtonState(docRef.id);
   } catch (e) {
     eventsStatus.className = 'status-line err';
     eventsStatus.textContent = 'Speichern fehlgeschlagen.';
@@ -946,7 +1178,9 @@ saveEventBtn.addEventListener('click', async () => {
 });
 
 } catch (e) {
-  authGate.innerHTML = '<p class="auth-hint">Team-Login momentan nicht verfügbar (Firebase-Initialisierung fehlgeschlagen).</p>';
+  unlockApp();
+  const eventsPanelEl = document.getElementById('eventsPanel');
+  if (eventsPanelEl) eventsPanelEl.innerHTML = '<h2 class="panel-h2">Gespeicherte Events</h2><p class="auth-hint">Team-Funktionen momentan nicht verfügbar (Firebase-Initialisierung fehlgeschlagen).</p>';
 }
 }
 
