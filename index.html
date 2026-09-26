@@ -257,6 +257,7 @@
     min-height:18px;
   }
   .status-line.err{color:var(--risk);}
+  .status-line.ok{color:var(--good);}
 
   #results{display:none;}
   .headline-block{
@@ -527,6 +528,13 @@
     flex-wrap:wrap;
     margin-top:4px;
   }
+  .pw-form{
+    margin-top:16px;
+    padding-top:16px;
+    border-top:1px solid var(--line);
+  }
+  .pw-form input[type=password]{margin-bottom:12px;}
+  .pw-form .submit-btn.small{margin-top:2px;}
   .event-select-row{
     display:flex;
     gap:8px;
@@ -694,9 +702,21 @@
       </div>
       <div class="events-actions">
         <button type="button" class="submit-btn small" id="saveEventBtn">Event speichern</button>
+        <button type="button" class="text-btn" id="changePwBtn">Passwort ändern</button>
         <button type="button" class="text-btn" id="lockAgainBtn">Abmelden</button>
       </div>
       <div class="status-line" id="eventsStatus"></div>
+
+      <div class="pw-form" id="changePwForm" style="display:none;">
+        <label for="pwCurrentInput">Aktuelles Passwort</label>
+        <input type="password" id="pwCurrentInput" autocomplete="current-password">
+        <label for="pwNewInput">Neues Passwort</label>
+        <input type="password" id="pwNewInput" autocomplete="new-password">
+        <label for="pwNewInput2">Neues Passwort bestätigen</label>
+        <input type="password" id="pwNewInput2" autocomplete="new-password">
+        <button type="button" class="submit-btn small" id="pwSubmitBtn">Passwort speichern</button>
+        <div class="status-line" id="pwStatus"></div>
+      </div>
 
       <div class="push-row">
         <div>
@@ -894,7 +914,7 @@ try {
   // WICHTIG: VAPID_KEY unten mit dem eigenen Web-Push-Zertifikat aus der
   // Firebase Console ersetzen (Projekteinstellungen -> Cloud Messaging ->
   // Web-Push-Zertifikate -> Schlüsselpaar generieren).
-  const VAPID_KEY = 'HIER_DEINEN_VAPID_KEY_EINFUEGEN';
+  const VAPID_KEY = 'BKyHD5-z5qwY1BIQgElASkr5aEpfRvzTCEkyR2FhJ2TnKcm1uAPX4-0MPQjeUVCrzFbSKaIH-plrePta8UqUSBA';
   const pushToggleBtn = document.getElementById('pushToggleBtn');
   const pushStatus = document.getElementById('pushStatus');
   let activeEventId = null;
@@ -1057,6 +1077,76 @@ try {
   lockEmailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') lockCodeInput.focus(); });
 
   lockAgainBtn.addEventListener('click', () => auth.signOut());
+
+  // ---- Passwort ändern -----------------------------------------------------
+  const changePwBtn = document.getElementById('changePwBtn');
+  const changePwForm = document.getElementById('changePwForm');
+  const pwCurrentInput = document.getElementById('pwCurrentInput');
+  const pwNewInput = document.getElementById('pwNewInput');
+  const pwNewInput2 = document.getElementById('pwNewInput2');
+  const pwSubmitBtn = document.getElementById('pwSubmitBtn');
+  const pwStatus = document.getElementById('pwStatus');
+
+  changePwBtn.addEventListener('click', () => {
+    const opening = changePwForm.style.display === 'none';
+    changePwForm.style.display = opening ? 'block' : 'none';
+    pwStatus.className = 'status-line';
+    pwStatus.textContent = '';
+    pwCurrentInput.value = '';
+    pwNewInput.value = '';
+    pwNewInput2.value = '';
+    if (opening) pwCurrentInput.focus();
+  });
+
+  async function submitPasswordChange() {
+    const currentPw = pwCurrentInput.value;
+    const newPw = pwNewInput.value;
+    const newPw2 = pwNewInput2.value;
+    if (!currentPw || !newPw || !newPw2) {
+      pwStatus.className = 'status-line err';
+      pwStatus.textContent = 'Bitte alle Felder ausfüllen.';
+      return;
+    }
+    if (newPw.length < 6) {
+      pwStatus.className = 'status-line err';
+      pwStatus.textContent = 'Das neue Passwort muss mindestens 6 Zeichen haben.';
+      return;
+    }
+    if (newPw !== newPw2) {
+      pwStatus.className = 'status-line err';
+      pwStatus.textContent = 'Die neuen Passwörter stimmen nicht überein.';
+      return;
+    }
+    const user = auth.currentUser;
+    if (!user || !user.email) return;
+    pwStatus.className = 'status-line';
+    pwStatus.textContent = 'Passwort wird geändert …';
+    pwSubmitBtn.disabled = true;
+    try {
+      const credential = firebase.auth.EmailAuthProvider.credential(user.email, currentPw);
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(newPw);
+      pwStatus.className = 'status-line ok';
+      pwStatus.textContent = 'Passwort erfolgreich geändert.';
+      pwCurrentInput.value = '';
+      pwNewInput.value = '';
+      pwNewInput2.value = '';
+    } catch (e) {
+      pwStatus.className = 'status-line err';
+      if (e && e.code === 'auth/wrong-password') {
+        pwStatus.textContent = 'Aktuelles Passwort ist falsch.';
+      } else if (e && e.code === 'auth/weak-password') {
+        pwStatus.textContent = 'Neues Passwort ist zu schwach.';
+      } else if (e && e.code === 'auth/too-many-requests') {
+        pwStatus.textContent = 'Zu viele Versuche. Bitte später erneut versuchen.';
+      } else {
+        pwStatus.textContent = 'Passwort ändern fehlgeschlagen.';
+      }
+    }
+    pwSubmitBtn.disabled = false;
+  }
+  pwSubmitBtn.addEventListener('click', submitPasswordChange);
+  pwNewInput2.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPasswordChange(); });
 
   let eventsCache = {}; // id -> Eventdaten, für Dropdown-Auswahl
 
