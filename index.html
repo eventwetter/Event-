@@ -611,15 +611,11 @@
     <h2 class="panel-h2">Gespeicherte Events</h2>
 
     <div id="authGate">
-      <p class="auth-hint">Zum Speichern, Laden und Löschen von Events anmelden (Team-Zugang).</p>
+      <p class="auth-hint">Team-Code eingeben, um Events zu speichern, zu laden und zu löschen.</p>
       <div class="field-row time-row">
-        <div>
-          <label for="loginEmail">E-Mail</label>
-          <input type="email" id="loginEmail" autocomplete="username">
-        </div>
-        <div>
-          <label for="loginPassword">Passwort</label>
-          <input type="password" id="loginPassword" autocomplete="current-password">
+        <div style="grid-column:1/-1;">
+          <label for="loginPassword">Team-Code</label>
+          <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Code eingeben">
         </div>
       </div>
       <button type="button" class="submit-btn small" id="loginBtn">Anmelden</button>
@@ -644,7 +640,7 @@
       </div>
       <div class="events-actions">
         <button type="button" class="submit-btn small" id="saveEventBtn">Event speichern</button>
-        <button type="button" class="text-btn" id="logoutBtn">Abmelden (<span id="loggedInAs"></span>)</button>
+        <button type="button" class="text-btn" id="logoutBtn">Abmelden<span id="loggedInAs"></span></button>
       </div>
       <div class="status-line" id="eventsStatus"></div>
     </div>
@@ -792,7 +788,10 @@ try {
   const auth = firebase.auth();
   const db = firebase.firestore();
 
-  const loginEmail = document.getElementById('loginEmail');
+  // Gemeinsamer Team-Zugang: eine einzige Firebase-Auth-Identität, deren
+  // Passwort als "Team-Code" fungiert. Die eigentliche Absicherung passiert
+  // über die Firestore-Regel (nur angemeldete Nutzer dürfen lesen/schreiben).
+  const TEAM_EMAIL = 'team@event-wetter.app';
   const loginPassword = document.getElementById('loginPassword');
   const loginBtn = document.getElementById('loginBtn');
   const logoutBtn = document.getElementById('logoutBtn');
@@ -808,11 +807,11 @@ loginBtn.addEventListener('click', async () => {
   loginStatus.className = 'status-line';
   loginStatus.textContent = 'Anmeldung läuft …';
   try {
-    await auth.signInWithEmailAndPassword(loginEmail.value.trim(), loginPassword.value);
+    await auth.signInWithEmailAndPassword(TEAM_EMAIL, loginPassword.value);
     loginStatus.textContent = '';
   } catch (e) {
     loginStatus.className = 'status-line err';
-    loginStatus.textContent = 'Anmeldung fehlgeschlagen: falsche Zugangsdaten oder kein Account hinterlegt.';
+    loginStatus.textContent = 'Anmeldung fehlgeschlagen: falscher Team-Code.';
   }
 });
 loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
@@ -823,7 +822,7 @@ auth.onAuthStateChanged((user) => {
   if (user) {
     authGate.style.display = 'none';
     eventsArea.style.display = 'block';
-    loggedInAs.textContent = user.email;
+    loggedInAs.textContent = '';
     loadEvents();
   } else {
     authGate.style.display = 'block';
@@ -881,7 +880,7 @@ deleteEventBtn.addEventListener('click', () => {
 function loadEventIntoForm(ev) {
   selectedPlace = { name: ev.ortName, lat: ev.lat, lon: ev.lon };
   ortInput.value = ev.ortName || '';
-  if (ev.datum) datumInput.value = ev.datum;
+  if (ev.datum) { datumInput.value = ev.datum; datumTouched = true; }
   if (ev.von) vonInput.value = ev.von;
   if (ev.bis) bisInput.value = ev.bis;
   if (ev.enddatum) {
@@ -934,7 +933,7 @@ saveEventBtn.addEventListener('click', async () => {
       enddatum: (multidayCheckbox.checked && enddatumInput.value) ? enddatumInput.value : null,
       von: vonInput.value,
       bis: bisInput.value,
-      createdBy: auth.currentUser.email,
+      createdBy: 'Team',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     eventName.value = '';
@@ -953,12 +952,6 @@ saveEventBtn.addEventListener('click', async () => {
 
 // default date = today
 const today = new Date();
-datumInput.value = today.toISOString().slice(0,10);
-datumInput.min = today.toISOString().slice(0,10);
-const maxDate = new Date(today.getTime() + 15*86400000);
-datumInput.max = maxDate.toISOString().slice(0,10);
-enddatumInput.max = maxDate.toISOString().slice(0,10);
-enddatumInput.value = datumInput.value; // zeigt das aktuelle Datum, solange nichts anderes gewählt wurde
 
 // Mehrtägiges Event: Checkbox blendet das Enddatum-Feld ein/aus. Enddatum darf
 // nicht vor dem Startdatum liegen; solange der Nutzer es nicht selbst geändert
@@ -972,7 +965,30 @@ function syncEnddatumBounds() {
     enddatumInput.value = datumInput.value;
   }
 }
-syncEnddatumBounds();
+
+// Datum-Feld: bleibt auf dem aktuellen Tag, solange der Nutzer es nicht selbst
+// geändert hat. Browser stellen Formularwerte beim Zurück-Navigieren oder beim
+// Reaktivieren einer im Hintergrund pausierten Seite (bfcache) oft unverändert
+// wieder her, ohne das Skript neu laufen zu lassen - dadurch blieb bisher ein
+// veraltetes Datum stehen. pageshow (inkl. bfcache-Fall) und visibilitychange
+// gleichen das bei jedem erneuten Sichtbarwerden der Seite wieder ab.
+let datumTouched = false;
+datumInput.addEventListener('input', () => { datumTouched = true; });
+
+function refreshDateDefaults() {
+  const now = new Date();
+  const nowStr = now.toISOString().slice(0,10);
+  datumInput.min = nowStr;
+  const maxStr = new Date(now.getTime() + 15*86400000).toISOString().slice(0,10);
+  datumInput.max = maxStr;
+  enddatumInput.max = maxStr;
+  if (!datumTouched) datumInput.value = nowStr;
+  syncEnddatumBounds();
+}
+refreshDateDefaults();
+window.addEventListener('pageshow', refreshDateDefaults);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshDateDefaults(); });
+
 datumInput.addEventListener('change', syncEnddatumBounds);
 
 multidayCheckbox.addEventListener('change', () => {
