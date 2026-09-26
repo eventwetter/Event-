@@ -1,0 +1,26 @@
+name: Regen-Frühwarnung
+
+on:
+  schedule:
+    # alle 15 Minuten - GeoSphere rechnet den Nowcast selbst nur alle 15 Min neu
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Abhängigkeiten installieren
+        run: pip install -r requirements.txt
+
+      - name: Nowcast prüfen und ggf. Push senden
+        env:
+          FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
+        run: python check_rain.py
+        
