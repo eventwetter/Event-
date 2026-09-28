@@ -1299,11 +1299,22 @@ function syncEnddatumBounds() {
 let datumTouched = false;
 datumInput.addEventListener('input', () => { datumTouched = true; });
 
+// Lokales Datum (YYYY-MM-DD) statt toISOString().slice(0,10): letzteres liefert
+// das UTC-Datum, das in Österreich (UTC+1/+2) rund um Mitternacht und bei
+// Tagesgrenz-Berechnungen (z. B. Übernacht-Zeitfenster) auf den falschen Tag
+// zeigt.
+function localISODate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function refreshDateDefaults() {
   const now = new Date();
-  const nowStr = now.toISOString().slice(0,10);
+  const nowStr = localISODate(now);
   datumInput.min = nowStr;
-  const maxStr = new Date(now.getTime() + 15*86400000).toISOString().slice(0,10);
+  const maxStr = localISODate(new Date(now.getTime() + 15*86400000));
   datumInput.max = maxStr;
   enddatumInput.max = maxStr;
   if (!datumTouched) datumInput.value = nowStr;
@@ -1650,7 +1661,7 @@ function renderResults(data, claefMap) {
   const chosenDate = datumInput.value;
   const vonH = vonInput.value;
   const bisH = bisInput.value;
-  const isToday = chosenDate === new Date().toISOString().slice(0,10);
+  const isToday = chosenDate === localISODate(new Date());
 
   const h = data.hourly;
   // best_match liefert bei models=... nur gesuffixte Felder; auf die Basis-Keys zurücklegen
@@ -1666,7 +1677,7 @@ function renderResults(data, claefMap) {
   const endDate = isMultiday
     ? enddatumInput.value
     : (bisH < vonH
-        ? new Date(new Date(chosenDate + 'T00:00:00').getTime() + 86400000).toISOString().slice(0,10)
+        ? localISODate(new Date(new Date(chosenDate + 'T00:00:00').getTime() + 86400000))
         : chosenDate);
   const spansMultipleDays = endDate !== chosenDate;
   const startStr = `${chosenDate}T${vonH}`;
