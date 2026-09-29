@@ -1791,13 +1791,25 @@ function renderResults(data, claefMap) {
   addMetric(metricGrid, 'Prognose-Verlässlichkeit', confidence.pct != null ? `${confidence.pct} %` : '–', confidence.pct != null && confidence.pct < 60);
 
   // echte astronomische Sonnenuntergangszeit (kein Modell, sondern Berechnung) -
-  // relevant für die Outdoor/Indoor-Entscheidung bei Abendterminen
-  const sunsetStart = dailySunsetMap[chosenDate];
-  const sunsetEnd = spansMultipleDays ? dailySunsetMap[endDate] : null;
+  // relevant für die Outdoor/Indoor-Entscheidung bei Abendterminen. Bei mehrtägigen
+  // Events wird jeder Tag im Fenster einzeln aufgeführt, nicht nur erster/letzter Tag.
+  const sunsetDates = [];
+  {
+    let d = new Date(chosenDate + 'T00:00:00');
+    const endD = new Date(endDate + 'T00:00:00');
+    while (d.getTime() <= endD.getTime()) {
+      sunsetDates.push(localISODate(d));
+      d = new Date(d.getTime() + 86400000);
+    }
+  }
+  const sunsetParts = sunsetDates
+    .map(ds => dailySunsetMap[ds] ? { date: ds, time: dailySunsetMap[ds] } : null)
+    .filter(Boolean);
   let sunsetLabel = '–';
-  if (sunsetStart) {
-    sunsetLabel = `${sunsetStart} Uhr`;
-    if (sunsetEnd && sunsetEnd !== sunsetStart) sunsetLabel += ` / ${sunsetEnd} Uhr`;
+  if (sunsetParts.length) {
+    sunsetLabel = spansMultipleDays
+      ? sunsetParts.map(p => `${p.date.slice(8,10)}.${p.date.slice(5,7)}. ${p.time} Uhr`).join(' · ')
+      : `${sunsetParts[0].time} Uhr`;
   }
   addMetric(metricGrid, 'Sonnenuntergang', sunsetLabel, anyAfterSunset);
 
