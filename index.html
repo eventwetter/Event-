@@ -1628,6 +1628,7 @@ async function runCheck() {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${selectedPlace.lat}&longitude=${selectedPlace.lon}` +
       `&hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,wind_speed_10m,wind_gusts_10m,weather_code` +
       `&current=temperature_2m,precipitation,cloud_cover,wind_gusts_10m,weather_code,is_day` +
+      `&daily=sunrise,sunset` +
       `&models=${MODEL_LIST}&timezone=auto&forecast_days=16`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('API-Fehler');
@@ -1715,9 +1716,19 @@ function renderResults(data, claefMap) {
   // Modellvergleich: Streuung von Temperatur/Niederschlag/Wind über die 5 Einzelmodelle
   const confidence = calculateModelConfidence(h, idxs);
 
+  // echte Sonnenuntergangszeit (Astronomie, nicht modellabhängig) je Kalendertag im Fenster
+  const dailySunsetMap = {};
+  if (data.daily && data.daily.time && data.daily.sunset) {
+    data.daily.time.forEach((d, i) => {
+      const s = data.daily.sunset[i];
+      if (s) dailySunsetMap[d] = s.slice(11,16);
+    });
+  }
+
   // aggregate
   let maxPrecipProb=0, sumPrecip=0, maxGust=0, minTemp=999, maxTemp=-999, worstCode=0, avgCloud=0;
   let claefUsed = false;
+  let anyAfterSunset = false;
   const rows = idxs.map(i => {
     const code = h.weather_code[i];
     const prob = h.precipitation_probability ? h.precipitation_probability[i] : null;
@@ -1745,6 +1756,9 @@ function renderResults(data, claefMap) {
     const status = hourStatus(prob ?? 0, mm, gust, code);
     const riskScore = (prob ?? 0) + mm * 15 + gust * 0.6 + (code >= 95 ? 60 : 0);
     const dateStr = h.time[i].slice(0,10);
+    const hourLabel = h.time[i].slice(11,16);
+    const rowSunset = dailySunsetMap[dateStr];
+    if (rowSunset && hourLabel > rowSunset) anyAfterSunset = true;
     const timeLabel = spansMultipleDays
       ? `${dateStr.slice(8,10)}.${dateStr.slice(5,7)}. ${h.time[i].slice(11,16)}`
       : h.time[i].slice(11,16);
@@ -1762,6 +1776,17 @@ function renderResults(data, claefMap) {
   addMetric(metricGrid, 'Windböen (max.)', `${Math.round(maxGust)} km/h`, maxGust>=50);
   addMetric(metricGrid, 'Gewitterrisiko', worstCode>=95 ? 'vorhanden' : 'keines', worstCode>=95);
   addMetric(metricGrid, 'Prognose-Verlässlichkeit', confidence.pct != null ? `${confidence.pct} %` : '–', confidence.pct != null && confidence.pct < 60);
+
+  // echte astronomische Sonnenuntergangszeit (kein Modell, sondern Berechnung) -
+  // relevant für die Outdoor/Indoor-Entscheidung bei Abendterminen
+  const sunsetStart = dailySunsetMap[chosenDate];
+  const sunsetEnd = spansMultipleDays ? dailySunsetMap[endDate] : null;
+  let sunsetLabel = '–';
+  if (sunsetStart) {
+    sunsetLabel = `${sunsetStart} Uhr`;
+    if (sunsetEnd && sunsetEnd !== sunsetStart) sunsetLabel += ` / ${sunsetEnd} Uhr`;
+  }
+  addMetric(metricGrid, 'Sonnenuntergang', sunsetLabel, anyAfterSunset);
 
   // bester zusammenhängender Zeitraum (status 'g')
   let bestStart = -1, bestLen = 0, curStart=-1, curLen=0;
