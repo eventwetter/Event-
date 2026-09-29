@@ -1669,6 +1669,13 @@ function renderResults(data, claefMap) {
   Object.keys(h).forEach(key => {
     if (key.endsWith('_best_match')) h[key.replace('_best_match', '')] = h[key];
   });
+  // gleiche Gesuffixt-Eigenheit betrifft bei mehreren Modellen auch den daily-Block
+  // (also auch sunrise/sunset, obwohl die eigentlich astronomisch und modellunabhängig sind)
+  if (data.daily) {
+    Object.keys(data.daily).forEach(key => {
+      if (key.endsWith('_best_match')) data.daily[key.replace('_best_match', '')] = data.daily[key];
+    });
+  }
 
   // Zeitfenster-Ende bestimmen: entweder explizit gewähltes Enddatum (mehrtägiges
   // Event) oder - falls "bis" zeitlich vor "von" liegt - automatisch der nächste
@@ -1716,13 +1723,19 @@ function renderResults(data, claefMap) {
   // Modellvergleich: Streuung von Temperatur/Niederschlag/Wind über die 5 Einzelmodelle
   const confidence = calculateModelConfidence(h, idxs);
 
-  // echte Sonnenuntergangszeit (Astronomie, nicht modellabhängig) je Kalendertag im Fenster
+  // echte Sonnenuntergangszeit (Astronomie, nicht modellabhängig) je Kalendertag im Fenster.
+  // Robust gegen Modell-Suffixe im Feldnamen (z. B. "sunset_best_match" statt "sunset"),
+  // falls Open-Meteo bei models=... auch modellunabhängige Felder suffixt.
   const dailySunsetMap = {};
-  if (data.daily && data.daily.time && data.daily.sunset) {
-    data.daily.time.forEach((d, i) => {
-      const s = data.daily.sunset[i];
-      if (s) dailySunsetMap[d] = s.slice(11,16);
-    });
+  if (data.daily && data.daily.time) {
+    const sunsetKey = Object.keys(data.daily).find(k => k === 'sunset' || k.startsWith('sunset_'));
+    const sunsetArr = sunsetKey ? data.daily[sunsetKey] : null;
+    if (sunsetArr) {
+      data.daily.time.forEach((d, i) => {
+        const s = sunsetArr[i];
+        if (s) dailySunsetMap[d] = s.slice(11,16);
+      });
+    }
   }
 
   // aggregate
@@ -1881,16 +1894,26 @@ function renderResults(data, claefMap) {
   methodBox.style.display = 'block';
 
   // verdict
+  // Hinweistexte je nach tatsächlicher Ursache (Regen vs. Wind) formulieren, statt
+  // pauschal "Regenschirm", auch wenn z. B. nur starke Böen ohne Niederschlag vorliegen.
+  const rainRisk = maxPrecipProb >= 30 || sumPrecip > 0 || worstCode === 3 || worstCode >= 95;
+  const windRisk = maxGust >= 35;
+  function riskAdvice() {
+    if (rainRisk && windRisk) return 'Regenschirme bzw. Unterstand griffbereit halten und Deko/Aufbauten gegen den Wind sichern.';
+    if (rainRisk) return 'Regenschirme oder ein Zelt bereithalten.';
+    if (windRisk) return `Kein Regen erwartet, aber Windböen bis ${Math.round(maxGust)} km/h – Deko, Kerzen und Aufbauten gut sichern.`;
+    return 'Ein Unterstand sollte trotzdem in der Nähe sein.';
+  }
   if (worstCode >= 95 || maxPrecipProb >= 60 || sumPrecip >= 2 || maxGust >= 55) {
     setVerdict('r','Indoor empfohlen',
       bestLen>0
-        ? `Im gewählten Fenster überwiegt das Risiko (Regen, Gewitter oder starker Wind). Am ehesten geeignet wäre ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr, aber auch dort keine Sicherheit.`
-        : `Über das gesamte Zeitfenster ist mit Regen, Gewitter oder starkem Wind zu rechnen. Für den Outdoor-Teil aktuell keine sichere Phase erkennbar.`);
-  } else if (maxPrecipProb >= 30 || sumPrecip > 0 || maxGust >= 35 || worstCode===3) {
+        ? `Im gewählten Fenster überwiegt das Risiko (${windRisk && !rainRisk ? 'starker Wind' : 'Regen, Gewitter oder starker Wind'}). Am ehesten geeignet wäre ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr, aber auch dort keine Sicherheit.`
+        : `Über das gesamte Zeitfenster ist mit ${windRisk && !rainRisk ? 'starkem Wind' : 'Regen, Gewitter oder starkem Wind'} zu rechnen. Für den Outdoor-Teil aktuell keine sichere Phase erkennbar.`);
+  } else if (rainRisk || windRisk) {
     setVerdict('a','Outdoor möglich, mit Plan B in Reichweite',
       bestLen>0
-        ? `Die beste Phase liegt bei ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr. Für den Rest des Fensters Regenschirme oder ein Zelt bereithalten.`
-        : `Leichtes Risiko über das ganze Fenster – Outdoor ist möglich, ein Unterstand sollte trotzdem in der Nähe sein.`);
+        ? `Die beste Phase liegt bei ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr. Für den Rest des Fensters: ${riskAdvice()}`
+        : `Leichtes Risiko über das ganze Fenster – Outdoor ist möglich. ${riskAdvice()}`);
   } else {
     setVerdict('g','Outdoor gut geeignet',
       `Für ${vonH}–${bisH} Uhr sind kaum Störungen zu erwarten – Bewölkung, Regen und Wind liegen im unkritischen Bereich.`);
