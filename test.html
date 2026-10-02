@@ -406,6 +406,8 @@
   /* Am Computer: Wetter-Symbol vor dem Text, Kurz-Spaltenköpfe ausgeblendet */
   table.hours .wx-ico{margin-right:6px;}
   table.hours .hs{display:none;}
+  table.hours .u{font-size:.8em;color:var(--muted,#8a8070);}
+  @media(max-width:389px){table.hours .u{display:none;}}
   /* Handy: alle Werte ohne seitliches Scrollen. Das Wetter erscheint als Symbol
      statt Text, die Spaltenköpfe sind kurz, der Ampelstatus ist ein farbiger
      Streifen an der Uhrzeit (statt eigener Punktspalte). */
@@ -684,6 +686,11 @@
 </head>
 <body>
 
+<!-- Wird nur angezeigt, wenn die Seite als test.html aufgerufen wird. Die Datei ist
+     sonst identisch mit index.html, so lässt sich Testversion und Live-Version
+     mit demselben Dateiinhalt veröffentlichen. -->
+<div id="testBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:3000;background:#9C5A46;color:#fff;text-align:center;font:600 11px 'Work Sans',sans-serif;letter-spacing:.1em;padding:4px 8px;text-transform:uppercase;">Testversion – gleiche Datenbank wie die Live-App</div>
+
 <div id="lockOverlay" class="lock-overlay">
   <div class="lock-box">
     <img src="Firmenlogo.png" alt="" class="lock-logo">
@@ -854,6 +861,10 @@
 </div>
 
 <script>
+if (/\/test\.html$/i.test(location.pathname)) {
+  document.getElementById('testBanner').style.display = 'block';
+  document.body.style.paddingTop = '24px';
+}
 const ortInput = document.getElementById('ort');
 const suggBox = document.getElementById('suggestions');
 const datumInput = document.getElementById('datum');
@@ -2008,7 +2019,7 @@ function renderResults(data, claefMap) {
   const table = document.getElementById('hoursTable');
   let html = '<tr><th><span class="hl">Uhrzeit</span><span class="hs">Zeit</span></th><th class="c-dot"></th><th>Wetter</th><th>Temp.</th>' +
     '<th class="c-cloud"><span class="hl">Wolken</span><span class="hs">☁️</span></th>' +
-    '<th>Regen %</th><th>mm</th><th>Böen km/h</th></tr>';
+    '<th>Regen %</th><th>mm</th><th>Böen</th></tr>';
   rows.forEach((r,i) => {
     const [label] = weatherCodeInfo(r.code);
     const dotClass = r.status;
@@ -2023,7 +2034,7 @@ function renderResults(data, claefMap) {
       <td class="c-cloud">${r.cloud}%</td>
       <td>${r.prob != null ? r.prob + '%' : '–'}</td>
       <td>${r.mm.toFixed(1)}${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
-      <td>${Math.round(r.gust)}${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
+      <td>${Math.round(r.gust)}<span class="u"> km/h</span>${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
     </tr>`;
   });
   table.innerHTML = html;
