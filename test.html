@@ -1,0 +1,2378 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event Wetter</title>
+<link rel="icon" type="image/png" href="applogo.png">
+<link rel="apple-touch-icon" href="applogo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1C1917">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Firebase (Code-Sperre + Events-Speicherung + Regen-Push). Config unten im Script eintragen. -->
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js"></script>
+<style>
+  /* Palette & Type nach cc-events.at: warmes Creme/Taupe, Schwarz, editoriale
+     Versal-Serife mit Sperrung für Überschriften, ruhige, matte Statusfarben
+     statt greller Ampelfarben. */
+  :root{
+    --ink:#1C1917;
+    --bg:#EDE5D8;
+    --card:#F7F2E8;
+    --line:#DBD0BE;
+    --muted:#847A6C;
+    --dark:#1C1917;
+    --cream-on-dark:#F3ECDD;
+    --good:#6E7A57;
+    --warn:#B08D57;
+    --risk:#9C5A46;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Work Sans',sans-serif;
+    line-height:1.55;
+    padding-bottom:60px;
+  }
+  .brand-logo{
+    display:block;
+    margin:0 auto 14px;
+    max-height:48px;
+    width:auto;
+  }
+  .eyebrow{
+    font-family:'Fraunces',serif;
+    font-size:11.5px;
+    font-weight:500;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--cream-on-dark);
+    background:var(--dark);
+    padding:9px 24px;
+    text-align:center;
+  }
+  header{
+    padding:36px 24px 28px;
+    max-width:760px;
+    margin:0 auto;
+    text-align:center;
+  }
+  h1{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:clamp(26px,6vw,38px);
+    margin:0 0 12px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+  }
+  header p{
+    color:var(--muted);
+    margin:0 auto;
+    max-width:54ch;
+    font-size:14.5px;
+  }
+  main{
+    max-width:760px;
+    margin:0 auto;
+    padding:0 24px;
+  }
+  .panel{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:28px;
+    margin-bottom:24px;
+  }
+  .field-row{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:18px;
+  }
+  @media(min-width:600px){
+    .field-row{grid-template-columns:1.3fr 1fr;}
+    .field-row.time-row{grid-template-columns:1fr 1fr;}
+  }
+  label{
+    display:block;
+    font-size:11.5px;
+    font-weight:600;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:7px;
+  }
+  input[type=text],input[type=date],input[type=time],input[type=password],input[type=email]{
+    width:100%;
+    padding:11px 12px;
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:#fff;
+    font-family:inherit;
+    font-size:15px;
+    color:var(--ink);
+  }
+  input:focus{outline:1.5px solid var(--ink);outline-offset:1px;}
+  .location-wrap{position:relative;}
+  .suggestions{
+    position:absolute;
+    top:calc(100% + 4px);
+    left:0;right:0;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:2px;
+    max-height:220px;
+    overflow-y:auto;
+    z-index:10;
+    box-shadow:0 6px 18px rgba(28,25,23,.12);
+  }
+  .suggestions button{
+    display:block;
+    width:100%;
+    text-align:left;
+    padding:10px 12px;
+    border:none;
+    background:none;
+    font-family:inherit;
+    font-size:14px;
+    cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  .suggestions button:hover{background:var(--bg);}
+
+  .multiday-row{
+    margin-top:16px;
+    display:flex;
+    align-items:flex-end;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  .checkbox-label{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13.5px;
+    color:var(--ink);
+    cursor:pointer;
+    padding-bottom:11px;
+  }
+  .checkbox-label input[type=checkbox]{
+    width:16px;
+    height:16px;
+    accent-color:var(--ink);
+    cursor:pointer;
+  }
+  #enddatumWrap{flex:1;min-width:160px;}
+
+  .mode-toggle{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+  }
+  .mode-toggle button{
+    font-family:'Fraunces',serif;
+    font-size:11px;
+    font-weight:500;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink);
+    background:none;
+    border:1px solid var(--ink);
+    border-radius:999px;
+    padding:7px 16px;
+    cursor:pointer;
+  }
+  .mode-toggle button.active{
+    background:var(--dark);
+    border-color:var(--dark);
+    color:var(--cream-on-dark);
+  }
+  #mapSection{
+    display:none;
+    margin-top:14px;
+  }
+  #mapSection .map-hint{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+  #locateBtn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-family:'Fraunces',serif;
+    font-size:11.5px;
+    font-weight:500;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink);
+    background:#fff;
+    border:1px solid var(--ink);
+    border-radius:999px;
+    padding:9px 16px;
+    cursor:pointer;
+    margin-bottom:10px;
+  }
+  #locateBtn:hover{background:var(--ink);color:var(--cream-on-dark);}
+  #locateBtn:disabled{opacity:.5;cursor:default;}
+  #mapEl{
+    height:280px;
+    border:1px solid var(--line);
+    border-radius:2px;
+  }
+  #mapPicked{
+    font-size:13px;
+    color:var(--ink);
+    margin-top:8px;
+    min-height:18px;
+  }
+  .submit-btn{
+    margin-top:22px;
+    background:var(--dark);
+    color:var(--cream-on-dark);
+    border:none;
+    padding:14px 30px;
+    border-radius:999px;
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:13px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  .submit-btn:hover{background:#000;}
+  .submit-btn:disabled{opacity:.5;cursor:default;}
+  .status-line{
+    font-size:13px;
+    color:var(--muted);
+    margin-top:12px;
+    min-height:18px;
+  }
+  .status-line.err{color:var(--risk);}
+  .status-line.ok{color:var(--good);}
+
+  #results{display:none;}
+  .headline-block{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:6px;
+  }
+  .headline-block h2{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:19px;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+    margin:0;
+  }
+  .live-badge{
+    font-size:10.5px;
+    font-weight:600;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--cream-on-dark);
+    background:var(--dark);
+    border-radius:999px;
+    padding:4px 11px;
+  }
+  .updated-note{
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:20px;
+  }
+
+  .verdict{
+    display:flex;
+    gap:14px;
+    align-items:flex-start;
+    padding:14px 16px;
+    border-radius:2px;
+    margin-bottom:14px;
+    background:#fff;
+    border:1px solid var(--line);
+    border-left:5px solid var(--line);
+  }
+  .verdict.good{border-left-color:var(--good);}
+  .verdict.warn{border-left-color:var(--warn);}
+  .verdict.bad{border-left-color:var(--risk);}
+  .verdict .mark{
+    font-family:'Fraunces',serif;
+    font-size:24px;
+    line-height:1;
+    min-width:28px;
+  }
+  .verdict.good .mark{color:var(--good);}
+  .verdict.warn .mark{color:var(--warn);}
+  .verdict.bad .mark{color:var(--risk);}
+  .verdict .text h3{
+    margin:0 0 3px;
+    font-size:15px;
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    letter-spacing:.01em;
+  }
+  .verdict .text p{margin:0;font-size:13.5px;color:var(--ink);}
+
+  .metric-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    margin-bottom:16px;
+  }
+  @media(max-width:520px){.metric-grid{grid-template-columns:repeat(2,1fr);}}
+  .metric{
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:9px 10px;
+    background:#fff;
+  }
+  .metric .label{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:3px;}
+  .metric .value{font-size:16px;font-family:'Fraunces',serif;}
+  .metric .value.flag{color:var(--risk);}
+
+  .period-box{
+    margin-bottom:14px;
+    padding:12px 15px;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:2px;
+    font-size:13px;
+  }
+  .period-line{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    padding:3px 0;
+  }
+  .period-line .dot{margin-top:2px;}
+  .period-line strong{font-weight:600;margin-right:2px;}
+  .period-line .reason{color:var(--muted);}
+  .period-line.conf{
+    margin-top:6px;
+    padding-top:10px;
+    border-top:1px solid var(--line);
+    color:var(--muted);
+    display:block;
+  }
+  .period-line.conf strong{display:inline;color:var(--ink);}
+
+  .method-box{
+    margin:24px 0 8px;
+    padding-top:16px;
+    border-top:1px solid var(--line);
+    font-size:12px;
+    line-height:1.6;
+    color:var(--muted);
+  }
+  .method-box strong{color:var(--ink);font-weight:600;}
+  .method-box p{margin:0 0 8px;}
+
+  table.hours{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13.5px;
+    margin-bottom:8px;
+  }
+  table.hours th{
+    text-align:left;
+    font-weight:600;
+    font-size:11px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    color:var(--muted);
+    padding:8px 6px;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  table.hours td{
+    padding:9px 6px;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  table.hours tr.best td{background:rgba(110,122,87,.13);}
+  table.hours tr.risk td{background:rgba(156,90,70,.13);}
+  .table-wrap{overflow-x:auto;}
+  /* Am Computer: Wetter-Symbol vor dem Text, Kurz-Spaltenköpfe ausgeblendet */
+  table.hours .wx-ico{margin-right:6px;}
+  table.hours .hs{display:none;}
+  /* Handy: alle Werte ohne seitliches Scrollen. Das Wetter erscheint als Symbol
+     statt Text, die Spaltenköpfe sind kurz, der Ampelstatus ist ein farbiger
+     Streifen an der Uhrzeit (statt eigener Punktspalte). */
+  @media(max-width:560px){
+    table.hours{font-size:12.5px;}
+    table.hours th{font-size:10px;letter-spacing:.02em;padding:8px 2px;white-space:normal;line-height:1.15;vertical-align:bottom;}
+    table.hours td{padding:9px 2px;}
+    table.hours .c-dot,table.hours .wx-label,table.hours .hl{display:none;}
+    table.hours .hs{display:inline;}
+    table.hours .wx-ico{margin-right:0;font-size:15px;}
+    table.hours td.t{padding-left:8px;}
+    table.hours th:first-child{padding-left:8px;}
+    table.hours td.t.s-g{box-shadow:inset 3px 0 0 var(--good);}
+    table.hours td.t.s-a{box-shadow:inset 3px 0 0 var(--warn);}
+    table.hours td.t.s-r{box-shadow:inset 3px 0 0 var(--risk);}
+  }
+  /* sehr schmale Geräte: Bewölkung entfällt, damit der Rest nicht scrollt */
+  @media(max-width:340px){
+    table.hours .c-cloud{display:none;}
+    table.hours{font-size:12px;}
+    table.hours th,table.hours td{padding-left:1px;padding-right:1px;}
+    table.hours td.t,table.hours th:first-child{padding-left:7px;}
+    table.hours .wx-ico{font-size:14px;}
+  }
+  .dot{
+    display:inline-block;
+    width:8px;height:8px;
+    border-radius:50%;
+    margin-right:5px;
+  }
+  .dot.g{background:var(--good);}
+  .dot.a{background:var(--warn);}
+  .dot.r{background:var(--risk);}
+  .claef-mark{color:var(--ink);font-weight:700;cursor:help;margin-left:1px;}
+
+  .live-panel{
+    border:1px solid var(--line);
+    background:var(--card);
+  }
+  .live-panel h2{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:17px;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+    margin:0 0 4px;
+  }
+  .live-panel .sub{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:16px;
+  }
+  .live-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:12px;
+    margin-bottom:6px;
+  }
+  @media(max-width:560px){.live-grid{grid-template-columns:repeat(2,1fr);}}
+  .live-grid .metric{background:#fff;}
+  .precip-warning{
+    margin-top:18px;
+    padding:15px 17px;
+    border-radius:2px;
+    font-size:14px;
+    background:#fff;
+    border:1px solid var(--line);
+    border-left:5px solid var(--line);
+  }
+  .precip-warning.info{border-left-color:var(--good);}
+  .precip-warning.alert{border-left-color:var(--risk);}
+  .precip-warning.unknown{color:var(--muted);}
+  .precip-warning strong{display:block;margin-bottom:4px;font-family:'Fraunces',serif;font-weight:500;font-size:14.5px;letter-spacing:.01em;}
+  .radar-link{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    margin-top:14px;
+    font-family:'Fraunces',serif;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    color:var(--ink);
+    text-decoration:none;
+    border:1px solid var(--ink);
+    border-radius:999px;
+    padding:9px 16px;
+  }
+  .radar-link:hover{background:var(--ink);color:var(--cream-on-dark);}
+
+  .legend{
+    font-size:12px;
+    color:var(--muted);
+    margin:14px 0 4px;
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .legend span{display:inline-flex;align-items:center;}
+
+  footer{
+    max-width:760px;
+    margin:0 auto;
+    padding:8px 24px 0;
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  .panel-h2{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:17px;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+    margin:0 0 14px;
+  }
+  .auth-hint{font-size:13.5px;color:var(--muted);margin:0 0 14px;}
+  .push-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    margin-top:18px;
+    padding-top:16px;
+    border-top:1px solid var(--line);
+  }
+  .push-title{font-size:12.5px;font-weight:600;letter-spacing:.04em;color:var(--ink);margin:0 0 3px;}
+  .push-hint{font-size:12.5px;color:var(--muted);margin:0;line-height:1.4;}
+  .push-row .text-btn{white-space:nowrap;flex-shrink:0;}
+  .push-row .text-btn.active{color:var(--good);}
+  .submit-btn.small{margin-top:14px;padding:10px 22px;font-size:12px;}
+  .text-btn{
+    background:none;
+    border:none;
+    font-family:'Work Sans',sans-serif;
+    font-size:12.5px;
+    color:var(--muted);
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+  }
+  .events-actions{
+    display:flex;
+    align-items:center;
+    gap:18px;
+    flex-wrap:wrap;
+    margin-top:4px;
+  }
+  .pw-form{
+    margin-top:16px;
+    padding-top:16px;
+    border-top:1px solid var(--line);
+  }
+  .pw-form input[type=password]{margin-bottom:12px;}
+  .pw-form .submit-btn.small{margin-top:2px;}
+  .event-select-row{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .event-select-row select{
+    flex:1;
+    min-width:180px;
+    padding:11px 12px;
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:#fff;
+    font-family:inherit;
+    font-size:14px;
+    color:var(--ink);
+  }
+  .event-select-row select:focus{outline:1.5px solid var(--ink);outline-offset:1px;}
+  .event-select-btns{display:flex;gap:8px;}
+  .event-select-btns button{
+    font-family:'Fraunces',serif;
+    font-size:11px;
+    font-weight:500;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    border-radius:999px;
+    padding:10px 15px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .event-select-btns button:disabled{opacity:.4;cursor:default;}
+  .event-select-btns .load-btn{background:none;border:1px solid var(--ink);color:var(--ink);}
+  .event-select-btns .load-btn:hover:not(:disabled){background:var(--ink);color:var(--cream-on-dark);}
+  .event-select-btns .delete-btn{background:none;border:1px solid var(--risk);color:var(--risk);}
+  .event-select-btns .delete-btn:hover:not(:disabled){background:var(--risk);color:#fff;}
+  .events-empty{font-size:13.5px;color:var(--muted);padding:6px 0;}
+
+  .confirm-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(28,25,23,.55);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    z-index:1000;
+  }
+  .confirm-box{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:26px 24px 22px;
+    max-width:340px;
+    width:100%;
+    text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.25);
+  }
+  .confirm-logo{max-height:34px;width:auto;margin:0 auto 16px;display:block;}
+  .confirm-message{
+    font-family:'Fraunces',serif;
+    font-size:16px;
+    font-weight:500;
+    color:var(--ink);
+    margin:0 0 22px;
+    line-height:1.4;
+  }
+  .confirm-actions{display:flex;gap:10px;justify-content:center;}
+  .confirm-actions button{
+    font-family:'Fraunces',serif;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    border-radius:999px;
+    padding:10px 20px;
+    cursor:pointer;
+    flex:1;
+  }
+  .confirm-cancel{background:none;border:1px solid var(--ink);color:var(--ink);}
+  .confirm-cancel:hover{background:var(--ink);color:var(--cream-on-dark);}
+  .confirm-ok{background:var(--risk);border:1px solid var(--risk);color:#fff;}
+  .confirm-ok:hover{background:#7c4536;}
+
+  .lock-overlay{
+    position:fixed;
+    inset:0;
+    background:var(--bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    z-index:2000;
+  }
+  .lock-box{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:38px 30px 30px;
+    max-width:360px;
+    width:100%;
+    text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.12);
+  }
+  .lock-logo{max-height:38px;width:auto;margin:0 auto 18px;display:block;}
+  .lock-title{
+    font-family:'Fraunces',serif;
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:.02em;
+    color:var(--ink);
+    margin:0 0 6px;
+  }
+  .lock-hint{font-size:13.5px;color:var(--muted);margin:0 0 20px;}
+  .lock-box input[type=password],.lock-box input[type=email]{
+    margin-bottom:12px;
+  }
+  .lock-box label{text-align:left;}
+  .lock-box .submit-btn{width:100%;}
+</style>
+</head>
+<body>
+
+<div id="lockOverlay" class="lock-overlay">
+  <div class="lock-box">
+    <img src="Firmenlogo.png" alt="" class="lock-logo">
+    <p class="lock-title">Event Wetter</p>
+    <p class="lock-hint">Bitte anmelden.</p>
+    <label for="lockEmailInput">E-Mail</label>
+    <input type="email" id="lockEmailInput" autocomplete="username">
+    <label for="lockCodeInput">Passwort</label>
+    <input type="password" id="lockCodeInput" autocomplete="current-password">
+    <button type="button" class="submit-btn" id="lockSubmitBtn">Anmelden</button>
+    <div class="status-line" id="lockStatus"></div>
+    <button type="button" class="text-btn" id="lockResetBtn" style="margin-top:14px;">Passwort vergessen?</button>
+  </div>
+</div>
+
+<div id="appContent" style="display:none;">
+
+<div class="eyebrow">cc-events.at</div>
+<header>
+  <img src="Firmenlogo.png" alt="" class="brand-logo">
+  <h1>Event Wetter</h1>
+  <p>Daraus wird eine Einschätzung, ob und wann die Trauung oder Feier im Freien stattfinden kann. Datenquelle: Open&#8209;Meteo, live und als Vorschau bis 16 Tage im Voraus.</p>
+</header>
+
+<main>
+  <div class="panel" id="eventsPanel">
+    <h2 class="panel-h2">Gespeicherte Events</h2>
+
+    <div id="eventsArea">
+      <div class="event-select-row">
+        <select id="eventSelect">
+          <option value="">– Event wählen –</option>
+        </select>
+        <div class="event-select-btns">
+          <button type="button" id="loadEventBtn" class="load-btn" disabled>Laden</button>
+          <button type="button" id="deleteEventBtn" class="delete-btn" disabled>Löschen</button>
+        </div>
+      </div>
+      <div class="field-row time-row" style="margin-top:16px;">
+        <div style="grid-column:1/-1;">
+          <label for="eventName">Aktuelles Event speichern als</label>
+          <input type="text" id="eventName" placeholder="z. B. Hochzeit Müller">
+        </div>
+      </div>
+      <div class="events-actions">
+        <button type="button" class="submit-btn small" id="saveEventBtn">Event speichern</button>
+        <button type="button" class="text-btn" id="changePwBtn">Passwort ändern</button>
+        <button type="button" class="text-btn" id="lockAgainBtn">Abmelden</button>
+      </div>
+      <div class="status-line" id="eventsStatus"></div>
+
+      <div class="pw-form" id="changePwForm" style="display:none;">
+        <label for="pwCurrentInput">Aktuelles Passwort</label>
+        <input type="password" id="pwCurrentInput" autocomplete="current-password">
+        <label for="pwNewInput">Neues Passwort</label>
+        <input type="password" id="pwNewInput" autocomplete="new-password">
+        <label for="pwNewInput2">Neues Passwort bestätigen</label>
+        <input type="password" id="pwNewInput2" autocomplete="new-password">
+        <button type="button" class="submit-btn small" id="pwSubmitBtn">Passwort speichern</button>
+        <div class="status-line" id="pwStatus"></div>
+      </div>
+
+      <div class="push-row">
+        <div>
+          <p class="push-title">Regen-Frühwarnung</p>
+          <p class="push-hint">Push-Benachrichtigung, sobald der Live-Nowcast Niederschlag im 20&#8209;km-Umkreis des aktuellen Events erkennt &#8211; mit Entfernung, Eintreffzeit und Hinweis auf hohe Intensität.</p>
+        </div>
+        <button type="button" class="text-btn" id="pushToggleBtn" disabled>Push aktivieren</button>
+      </div>
+      <div class="status-line" id="pushStatus"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="field-row">
+      <div class="location-wrap">
+        <label for="ort">Ort</label>
+        <input type="text" id="ort" placeholder="Ort oder Adresse, z. B. Hauptstraße 12, Wiener Neustadt" autocomplete="off">
+        <div class="suggestions" id="suggestions" style="display:none;"></div>
+        <div class="mode-toggle">
+          <button type="button" id="modeTextBtn" class="active">Ort eingeben</button>
+          <button type="button" id="modeMapBtn">Auf Karte wählen</button>
+        </div>
+        <div id="mapSection">
+          <p class="map-hint">Städte sind groß, und Schauer oder Gewitter kommen oft nur aus einer Richtung – daher hilft der genaue Punkt statt nur des Stadtnamens.</p>
+          <button type="button" id="locateBtn">📍 Meinen Standort verwenden</button>
+          <div id="mapEl"></div>
+          <div id="mapPicked"></div>
+        </div>
+      </div>
+      <div>
+        <label for="datum">Datum</label>
+        <input type="date" id="datum">
+      </div>
+    </div>
+    <div class="multiday-row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="multiday">
+        Mehrtägiges Event
+      </label>
+      <div id="enddatumWrap" style="display:none;">
+        <label for="enddatum">Enddatum</label>
+        <input type="date" id="enddatum">
+      </div>
+    </div>
+    <div class="field-row time-row" style="margin-top:18px;">
+      <div>
+        <label for="von">Zeitfenster von</label>
+        <input type="time" id="von" value="14:00">
+      </div>
+      <div>
+        <label for="bis">Zeitfenster bis</label>
+        <input type="time" id="bis" value="19:00">
+      </div>
+    </div>
+    <p class="map-hint" style="margin-top:6px;" id="timeHint">Liegt „bis" zeitlich vor „von", läuft das Fenster automatisch bis zu dieser Uhrzeit am nächsten Tag weiter.</p>
+    <button class="submit-btn" id="checkBtn">Wetter prüfen</button>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+
+  <div id="results">
+    <div class="panel">
+      <div class="headline-block">
+        <h2 id="resultOrt"></h2>
+        <span class="live-badge" id="liveBadge" style="display:none;">live abgeglichen</span>
+      </div>
+      <div class="updated-note" id="updatedNote"></div>
+
+      <div class="verdict" id="verdictBox">
+        <div class="mark" id="verdictMark"></div>
+        <div class="text">
+          <h3 id="verdictTitle"></h3>
+          <p id="verdictText"></p>
+        </div>
+      </div>
+
+      <div class="metric-grid" id="metricGrid"></div>
+
+      <div class="period-box" id="periodBox"></div>
+
+      <a href="#" id="radarLink" class="radar-link" target="_blank" rel="noopener" style="display:none;">🌧️ Regenradar auf Windy öffnen (für diesen Ort)</a>
+
+      <div class="table-wrap">
+        <table class="hours" id="hoursTable"></table>
+      </div>
+      <div class="legend">
+        <span><span class="dot g"></span>gut geeignet</span>
+        <span><span class="dot a"></span>grenzwertig</span>
+        <span><span class="dot r"></span>kritisch</span>
+      </div>
+    </div>
+
+    <div class="panel live-panel" id="livePanel" style="display:none;">
+      <h2>Live-Nowcast (GeoSphere Austria)</h2>
+      <div class="sub" id="liveSub">Messwerte und 15-Minuten-Nowcast für den genauen Punkt.</div>
+      <div class="live-grid" id="liveGrid"></div>
+      <div class="precip-warning" id="precipWarning" style="display:none;"></div>
+    </div>
+
+    <div class="method-box" id="methodBox" style="display:none;"></div>
+  </div>
+</main>
+
+<footer>
+  Einschätzung als Orientierung, keine Garantie – bei Gewitterwarnung oder hoher Niederschlagswahrscheinlichkeit rechtzeitig auf die Indoor-Alternative vorbereiten.
+</footer>
+
+</div>
+
+<script>
+const ortInput = document.getElementById('ort');
+const suggBox = document.getElementById('suggestions');
+const datumInput = document.getElementById('datum');
+const vonInput = document.getElementById('von');
+const bisInput = document.getElementById('bis');
+const multidayCheckbox = document.getElementById('multiday');
+const enddatumWrap = document.getElementById('enddatumWrap');
+const enddatumInput = document.getElementById('enddatum');
+const checkBtn = document.getElementById('checkBtn');
+const statusLine = document.getElementById('statusLine');
+const resultsEl = document.getElementById('results');
+
+let selectedPlace = null; // {name, lat, lon}
+let suggestTimer = null;
+
+// =====================================================================
+// FIREBASE: Login (E-Mail/Passwort) sperrt die ganze App + Events
+// speichern/laden/löschen
+// ---------------------------------------------------------------------
+// WICHTIG: firebaseConfig unten mit den echten Werten aus der Firebase
+// Console ersetzen (Projekteinstellungen → Meine Apps → Web-App → Config).
+// Der apiKey ist NICHT geheim - der Schutz kommt über Firestore-Regeln
+// (nur eingeloggte Team-Accounts dürfen lesen/schreiben) und darüber,
+// dass nur von dir angelegte Accounts sich überhaupt einloggen können
+// (Firebase Console → Authentication → Users → Add user, pro Team-
+// Mitglied ein eigenes Konto).
+//
+// In ein try/catch gepackt: lädt das Firebase-SDK aus irgendeinem Grund
+// nicht (Netzwerk, Blocker, Offline-Vorschau), bleibt wenigstens der
+// eigentliche Wetter-Check nutzbar, statt dass die ganze Seite abstürzt -
+// die Login-Sperre wird dann übersprungen.
+// =====================================================================
+const lockOverlay = document.getElementById('lockOverlay');
+const appContent = document.getElementById('appContent');
+const lockEmailInput = document.getElementById('lockEmailInput');
+const lockCodeInput = document.getElementById('lockCodeInput');
+const lockSubmitBtn = document.getElementById('lockSubmitBtn');
+const lockStatus = document.getElementById('lockStatus');
+
+function unlockApp() {
+  lockOverlay.style.display = 'none';
+  appContent.style.display = 'block';
+}
+function showLock(message) {
+  appContent.style.display = 'none';
+  lockOverlay.style.display = 'flex';
+  lockStatus.className = message ? 'status-line err' : 'status-line';
+  lockStatus.textContent = message || '';
+  lockCodeInput.value = '';
+  lockEmailInput.focus();
+}
+
+// Fallback ohne Firebase (SDK nicht ladbar: Netzwerk, Blocker, Firmen-Firewall):
+// Der Wetter-Check läuft trotzdem. Das ist unkritisch, weil er nur öffentliche
+// Wetterdaten nutzt - die gespeicherten Events und Push-Abos sind unabhängig
+// davon durch die Firestore-Regeln auf dem Server geschützt. Nur die
+// Team-Funktionen (Events speichern/laden, Push, Passwort ändern) fallen weg.
+function enableWithoutFirebase(reason) {
+  unlockApp();
+  const eventsPanelEl = document.getElementById('eventsPanel');
+  if (eventsPanelEl) {
+    eventsPanelEl.innerHTML = '<h2 class="panel-h2">Gespeicherte Events</h2>' +
+      '<p class="auth-hint">Team-Funktionen (Events speichern, Push, Anmeldung) sind gerade nicht verfügbar – ' +
+      reason + ' Der Wetter-Check unten funktioniert trotzdem. Zum Wiederherstellen die Seite neu laden.</p>';
+  }
+}
+
+if (typeof firebase === 'undefined') {
+  enableWithoutFirebase('die Verbindung zu Firebase konnte nicht aufgebaut werden.');
+} else {
+try {
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOOMI7UkBsT5jNuY3KOcBcfDiU9os8XMs",
+    authDomain: "event-wetter.firebaseapp.com",
+    projectId: "event-wetter",
+    storageBucket: "event-wetter.firebasestorage.app",
+    messagingSenderId: "711746288105",
+    appId: "1:711746288105:web:a8174a792b894098493378"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const eventSelect = document.getElementById('eventSelect');
+  const loadEventBtn = document.getElementById('loadEventBtn');
+  const deleteEventBtn = document.getElementById('deleteEventBtn');
+  const eventName = document.getElementById('eventName');
+  const saveEventBtn = document.getElementById('saveEventBtn');
+  const eventsStatus = document.getElementById('eventsStatus');
+  const lockAgainBtn = document.getElementById('lockAgainBtn');
+
+  // ---- Regen-Frühwarnung per Push (Firebase Cloud Messaging) --------------
+  // Ein Cronjob (siehe check_rain.py im Repo) prüft regelmäßig den GeoSphere-
+  // Nowcast im 20-km-Umkreis jedes abonnierten Events und schickt bei
+  // Niederschlag eine Push-Benachrichtigung mit Entfernung, Eintreffzeit und
+  // ggf. Hinweis auf hohe Intensität - wie bei der Bergtouren-Wetter-App.
+  // WICHTIG: VAPID_KEY unten mit dem eigenen Web-Push-Zertifikat aus der
+  // Firebase Console ersetzen (Projekteinstellungen -> Cloud Messaging ->
+  // Web-Push-Zertifikate -> Schlüsselpaar generieren).
+  const VAPID_KEY = 'BKyHD5-z5qwY1BIQgElASkr5aEpfRvzTCEkyR2FhJ2TnKcm1uAPX4-0MPQjeUVCrzFbSKaIH-plrePta8UqUSBA';
+  const pushToggleBtn = document.getElementById('pushToggleBtn');
+  const pushStatus = document.getElementById('pushStatus');
+  let activeEventId = null;
+  let messaging = null;
+  let swRegistration = null;
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./firebase-messaging-sw.js')
+      .then(reg => {
+        swRegistration = reg;
+        try {
+          if (!firebase.messaging.isSupported || firebase.messaging.isSupported()) {
+            messaging = firebase.messaging();
+          }
+        } catch (e) { /* Push in diesem Browser nicht verfügbar */ }
+        // Falls der Login schon vor der SW-Registrierung durchgelaufen ist.
+        if (auth.currentUser) refreshFcmToken();
+      })
+      .catch(e => console.warn('Service Worker für Push konnte nicht registriert werden:', e));
+  }
+
+  // FCM-Tokens ändern sich regelmäßig (Browser-/OS-Update, neue Installation,
+  // abgelaufener Token) - ohne regelmäßigen Abgleich laufen Pushes irgendwann
+  // ins Leere, ohne dass das auffällt. Bei jedem App-Start (siehe
+  // onAuthStateChanged weiter unten) wird der aktuelle Token geholt und, falls
+  // er sich gegenüber dem zuletzt bekannten geändert hat, in allen Abos
+  // dieses Geräts ersetzt.
+  async function refreshFcmToken() {
+    if (!messaging) return;
+    try {
+      const newToken = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
+      if (!newToken) return;
+      const oldToken = localStorage.getItem('eventWetterFcmToken');
+      if (oldToken && oldToken !== newToken) {
+        const FV = firebase.firestore.FieldValue;
+        const batch = db.batch();
+        let changes = 0;
+        // Aktuelle Struktur: mehrere Geräte pro Event im Array "tokens"
+        const snap = await db.collection('event_subscriptions').where('tokens', 'array-contains', oldToken).get();
+        snap.forEach(doc => {
+          const arr = (doc.data().tokens || []).filter(t => t !== oldToken);
+          if (!arr.includes(newToken)) arr.push(newToken);
+          batch.update(doc.ref, { tokens: arr });
+          changes++;
+        });
+        // Altbestand: einzelnes Feld "token" (vor der Umstellung auf mehrere Geräte)
+        const legacy = await db.collection('event_subscriptions').where('token', '==', oldToken).get();
+        legacy.forEach(doc => {
+          batch.update(doc.ref, { token: FV.delete(), tokens: FV.arrayUnion(newToken) });
+          changes++;
+        });
+        if (changes) await batch.commit();
+      }
+      localStorage.setItem('eventWetterFcmToken', newToken);
+      if (activeEventId) refreshPushButtonState(activeEventId);
+    } catch (e) {
+      // Kein Fehlerfall im engeren Sinn - z.B. wenn noch nie eine Berechtigung
+      // erteilt wurde. Dann bleibt der alte Token (falls vorhanden) einfach stehen.
+    }
+  }
+
+  async function refreshPushButtonState(id) {
+    activeEventId = id;
+    if (!id) {
+      pushToggleBtn.disabled = true;
+      pushToggleBtn.textContent = 'Push aktivieren';
+      pushToggleBtn.classList.remove('active');
+      return;
+    }
+    pushToggleBtn.disabled = false;
+    try {
+      const snap = await db.collection('event_subscriptions').doc(id).get();
+      // "Aktiv" heißt: DIESES Gerät ist eingetragen - andere Team-Geräte haben
+      // ihr eigenes Abo im selben Event-Dokument.
+      const myToken = localStorage.getItem('eventWetterFcmToken');
+      const data = snap.exists ? snap.data() : {};
+      const subscribed = !!myToken && ((data.tokens || []).includes(myToken) || data.token === myToken);
+      pushToggleBtn.textContent = subscribed ? '🔔 Push aktiv – deaktivieren' : 'Push aktivieren';
+      pushToggleBtn.classList.toggle('active', subscribed);
+    } catch (e) {
+      pushToggleBtn.textContent = 'Push aktivieren';
+    }
+  }
+
+  // iPhone/iPad: Web-Push gibt es dort nur, wenn die App über "Zum Home-
+  // Bildschirm" installiert wurde (ab iOS 16.4) - im normalen Safari-Tab nicht.
+  function isIosBrowserTab() {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    return ios && !standalone;
+  }
+
+  pushToggleBtn.addEventListener('click', async () => {
+    if (!activeEventId) return;
+    pushStatus.className = 'status-line';
+    const isActive = pushToggleBtn.classList.contains('active');
+
+    if (isActive) {
+      pushStatus.textContent = 'Deaktiviere …';
+      try {
+        // Nur DIESES Gerät austragen, die Abos der anderen bleiben bestehen.
+        const FV = firebase.firestore.FieldValue;
+        const myToken = localStorage.getItem('eventWetterFcmToken');
+        const ref = db.collection('event_subscriptions').doc(activeEventId);
+        const snap = await ref.get();
+        const upd = { tokens: FV.arrayRemove(myToken) };
+        if (snap.exists && snap.data().token === myToken) upd.token = FV.delete();
+        await ref.update(upd);
+        pushStatus.textContent = 'Push auf diesem Gerät deaktiviert.';
+        refreshPushButtonState(activeEventId);
+      } catch (e) {
+        pushStatus.className = 'status-line err';
+        pushStatus.textContent = 'Deaktivieren fehlgeschlagen.';
+      }
+      return;
+    }
+
+    if (!messaging) {
+      pushStatus.className = 'status-line err';
+      pushStatus.textContent = isIosBrowserTab()
+        ? 'Auf dem iPhone funktioniert Push nur, wenn die App über „Teilen → Zum Home-Bildschirm" installiert und von dort geöffnet wurde.'
+        : 'Push-Benachrichtigungen werden von diesem Browser nicht unterstützt.';
+      return;
+    }
+    const ev = eventsCache[activeEventId];
+    if (!ev) {
+      pushStatus.className = 'status-line err';
+      pushStatus.textContent = 'Bitte das Event zuerst speichern oder aus der Liste laden.';
+      return;
+    }
+
+    pushStatus.textContent = 'Aktiviere …';
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        pushStatus.className = 'status-line err';
+        pushStatus.textContent = 'Benachrichtigungen wurden nicht erlaubt.';
+        return;
+      }
+      const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
+      if (!token) throw new Error('Kein Push-Token erhalten.');
+      const FV = firebase.firestore.FieldValue;
+      const ref = db.collection('event_subscriptions').doc(activeEventId);
+      // Mehrere Geräte pro Event: Token im Array ergänzen. Ein evtl. noch im alten
+      // Einzelfeld "token" stehendes Gerät wird dabei mit übernommen.
+      const existing = await ref.get();
+      const legacyToken = existing.exists ? existing.data().token : null;
+      const addTokens = [token];
+      if (legacyToken && legacyToken !== token) addTokens.push(legacyToken);
+      await ref.set({
+        eventId: activeEventId,
+        ortName: ev.ortName,
+        lat: ev.lat,
+        lon: ev.lon,
+        datum: ev.datum,
+        enddatum: ev.enddatum || null,
+        von: ev.von,
+        bis: ev.bis,
+        tokens: FV.arrayUnion(...addTokens),
+        token: FV.delete(),
+        finished: false,
+        updatedAt: FV.serverTimestamp()
+      }, { merge: true });
+      localStorage.setItem('eventWetterFcmToken', token);
+      pushStatus.textContent = 'Regen-Push aktiviert.';
+      refreshPushButtonState(activeEventId);
+    } catch (e) {
+      pushStatus.className = 'status-line err';
+      pushStatus.textContent = 'Aktivieren fehlgeschlagen: ' + (e && e.message ? e.message : e);
+    }
+  });
+
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      unlockApp();
+      loadEvents();
+      refreshFcmToken(); // bei jedem App-Start prüfen, ob sich der FCM-Token geändert hat
+    } else {
+      showLock();
+    }
+  });
+
+  async function submitLogin() {
+    const email = lockEmailInput.value.trim();
+    const password = lockCodeInput.value;
+    if (!email || !password) {
+      lockStatus.className = 'status-line err';
+      lockStatus.textContent = 'Bitte E-Mail und Passwort eingeben.';
+      return;
+    }
+    lockStatus.className = 'status-line';
+    lockStatus.textContent = 'Anmeldung läuft …';
+    lockSubmitBtn.disabled = true;
+    try {
+      await auth.signInWithEmailAndPassword(email, password);
+      lockStatus.textContent = '';
+    } catch (e) {
+      if (e && e.code === 'auth/network-request-failed') {
+        showLock('Keine Verbindung zum Anmelde-Dienst – bitte Internetverbindung prüfen und erneut versuchen.');
+      } else if (e && e.code === 'auth/too-many-requests') {
+        showLock('Zu viele Fehlversuche – bitte kurz warten und erneut versuchen.');
+      } else {
+        showLock('Anmeldung fehlgeschlagen: falsche Zugangsdaten oder kein Account hinterlegt.');
+      }
+    }
+    lockSubmitBtn.disabled = false;
+  }
+  lockSubmitBtn.addEventListener('click', submitLogin);
+  lockCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
+
+  // Passwort vergessen: Firebase schickt einen Link zum Zurücksetzen an die
+  // E-Mail-Adresse. Bewusst immer dieselbe Rückmeldung, egal ob die Adresse
+  // ein Konto hat - verrät sonst, welche Adressen im Team existieren.
+  document.getElementById('lockResetBtn').addEventListener('click', async () => {
+    const email = lockEmailInput.value.trim();
+    if (!email) {
+      lockStatus.className = 'status-line err';
+      lockStatus.textContent = 'Bitte oben zuerst die E-Mail-Adresse eingeben.';
+      lockEmailInput.focus();
+      return;
+    }
+    lockStatus.className = 'status-line';
+    lockStatus.textContent = 'Sende Link …';
+    try {
+      auth.languageCode = 'de';
+      await auth.sendPasswordResetEmail(email);
+    } catch (e) {
+      if (e && e.code === 'auth/invalid-email') {
+        lockStatus.className = 'status-line err';
+        lockStatus.textContent = 'Das ist keine gültige E-Mail-Adresse.';
+        return;
+      }
+    }
+    lockStatus.className = 'status-line ok';
+    lockStatus.textContent = 'Falls ein Konto existiert, wurde ein Link zum Zurücksetzen gesendet (ggf. Spam-Ordner prüfen).';
+  });
+  lockEmailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') lockCodeInput.focus(); });
+
+  lockAgainBtn.addEventListener('click', () => auth.signOut());
+
+  // ---- Passwort ändern -----------------------------------------------------
+  const changePwBtn = document.getElementById('changePwBtn');
+  const changePwForm = document.getElementById('changePwForm');
+  const pwCurrentInput = document.getElementById('pwCurrentInput');
+  const pwNewInput = document.getElementById('pwNewInput');
+  const pwNewInput2 = document.getElementById('pwNewInput2');
+  const pwSubmitBtn = document.getElementById('pwSubmitBtn');
+  const pwStatus = document.getElementById('pwStatus');
+
+  changePwBtn.addEventListener('click', () => {
+    const opening = changePwForm.style.display === 'none';
+    changePwForm.style.display = opening ? 'block' : 'none';
+    pwStatus.className = 'status-line';
+    pwStatus.textContent = '';
+    pwCurrentInput.value = '';
+    pwNewInput.value = '';
+    pwNewInput2.value = '';
+    if (opening) pwCurrentInput.focus();
+  });
+
+  async function submitPasswordChange() {
+    const currentPw = pwCurrentInput.value;
+    const newPw = pwNewInput.value;
+    const newPw2 = pwNewInput2.value;
+    if (!currentPw || !newPw || !newPw2) {
+      pwStatus.className = 'status-line err';
+      pwStatus.textContent = 'Bitte alle Felder ausfüllen.';
+      return;
+    }
+    if (newPw.length < 6) {
+      pwStatus.className = 'status-line err';
+      pwStatus.textContent = 'Das neue Passwort muss mindestens 6 Zeichen haben.';
+      return;
+    }
+    if (newPw !== newPw2) {
+      pwStatus.className = 'status-line err';
+      pwStatus.textContent = 'Die neuen Passwörter stimmen nicht überein.';
+      return;
+    }
+    const user = auth.currentUser;
+    if (!user || !user.email) return;
+    pwStatus.className = 'status-line';
+    pwStatus.textContent = 'Passwort wird geändert …';
+    pwSubmitBtn.disabled = true;
+    try {
+      const credential = firebase.auth.EmailAuthProvider.credential(user.email, currentPw);
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(newPw);
+      pwStatus.className = 'status-line ok';
+      pwStatus.textContent = 'Passwort erfolgreich geändert.';
+      pwCurrentInput.value = '';
+      pwNewInput.value = '';
+      pwNewInput2.value = '';
+    } catch (e) {
+      pwStatus.className = 'status-line err';
+      if (e && e.code === 'auth/wrong-password') {
+        pwStatus.textContent = 'Aktuelles Passwort ist falsch.';
+      } else if (e && e.code === 'auth/weak-password') {
+        pwStatus.textContent = 'Neues Passwort ist zu schwach.';
+      } else if (e && e.code === 'auth/too-many-requests') {
+        pwStatus.textContent = 'Zu viele Versuche. Bitte später erneut versuchen.';
+      } else {
+        pwStatus.textContent = 'Passwort ändern fehlgeschlagen.';
+      }
+    }
+    pwSubmitBtn.disabled = false;
+  }
+  pwSubmitBtn.addEventListener('click', submitPasswordChange);
+  pwNewInput2.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPasswordChange(); });
+
+  let eventsCache = {}; // id -> Eventdaten, für Dropdown-Auswahl
+
+async function loadEvents() {
+  eventSelect.innerHTML = '<option value="">Lädt …</option>';
+  loadEventBtn.disabled = true;
+  deleteEventBtn.disabled = true;
+  eventsCache = {};
+  try {
+    const snap = await db.collection('events').orderBy('datum').get();
+    eventSelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = snap.empty ? 'Keine gespeicherten Events' : '– Event wählen –';
+    eventSelect.appendChild(placeholder);
+    snap.forEach(doc => {
+      const ev = doc.data();
+      eventsCache[doc.id] = ev;
+      const opt = document.createElement('option');
+      opt.value = doc.id;
+      const zeit = ev.von ? `, ${ev.von}–${ev.bis} Uhr` : '';
+      const datumLabel = ev.enddatum && ev.enddatum !== ev.datum ? `${ev.datum} – ${ev.enddatum}` : (ev.datum || '');
+      opt.textContent = `${ev.name || '(ohne Namen)'} — ${ev.ortName || ''} — ${datumLabel}${zeit}`;
+      eventSelect.appendChild(opt);
+    });
+  } catch (e) {
+    eventSelect.innerHTML = '<option value="">Events konnten nicht geladen werden</option>';
+  }
+}
+
+eventSelect.addEventListener('change', () => {
+  const has = !!eventSelect.value;
+  loadEventBtn.disabled = !has;
+  deleteEventBtn.disabled = !has;
+});
+
+loadEventBtn.addEventListener('click', () => {
+  const id = eventSelect.value;
+  const ev = eventsCache[id];
+  if (ev) loadEventIntoForm(ev, id);
+});
+
+deleteEventBtn.addEventListener('click', () => {
+  const id = eventSelect.value;
+  const ev = eventsCache[id];
+  if (id) deleteEvent(id, ev && ev.name);
+});
+
+function loadEventIntoForm(ev, id) {
+  refreshPushButtonState(id || null);
+  selectedPlace = { name: ev.ortName, lat: ev.lat, lon: ev.lon };
+  ortInput.value = ev.ortName || '';
+  if (ev.datum) { datumInput.value = ev.datum; datumTouched = true; }
+  if (ev.von) vonInput.value = ev.von;
+  if (ev.bis) bisInput.value = ev.bis;
+  if (ev.enddatum) {
+    multidayCheckbox.checked = true;
+    enddatumWrap.style.display = 'block';
+    enddatumInput.value = ev.enddatum;
+    enddatumTouched = true;
+    syncEnddatumBounds();
+  } else {
+    multidayCheckbox.checked = false;
+    enddatumWrap.style.display = 'none';
+    enddatumTouched = false;
+    enddatumInput.value = datumInput.value;
+  }
+  document.querySelector('.panel:not(#eventsPanel)').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function deleteEvent(id, name) {
+  const ok = await customConfirm(`„${name || 'Dieses Event'}" wirklich löschen?`, 'Löschen');
+  if (!ok) return;
+  try {
+    await db.collection('events').doc(id).delete();
+    try { await db.collection('event_subscriptions').doc(id).delete(); } catch (e) { /* egal, falls keine Subscription existierte */ }
+    if (activeEventId === id) refreshPushButtonState(null);
+    loadEvents();
+  } catch (e) {
+    eventsStatus.className = 'status-line err';
+    eventsStatus.textContent = 'Löschen fehlgeschlagen.';
+  }
+}
+
+saveEventBtn.addEventListener('click', async () => {
+  eventsStatus.className = 'status-line';
+  if (!selectedPlace) {
+    eventsStatus.className = 'status-line err';
+    eventsStatus.textContent = 'Bitte zuerst unten einen Ort wählen.';
+    return;
+  }
+  if (!eventName.value.trim()) {
+    eventsStatus.className = 'status-line err';
+    eventsStatus.textContent = 'Bitte einen Namen für das Event eingeben.';
+    return;
+  }
+  eventsStatus.textContent = 'Speichert …';
+  try {
+    const docRef = await db.collection('events').add({
+      name: eventName.value.trim(),
+      ortName: selectedPlace.name,
+      lat: selectedPlace.lat,
+      lon: selectedPlace.lon,
+      datum: datumInput.value,
+      enddatum: (multidayCheckbox.checked && enddatumInput.value) ? enddatumInput.value : null,
+      von: vonInput.value,
+      bis: bisInput.value,
+      createdBy: (auth.currentUser && auth.currentUser.email) || 'Team',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    eventName.value = '';
+    eventsStatus.textContent = 'Event gespeichert.';
+    await loadEvents();
+    refreshPushButtonState(docRef.id);
+  } catch (e) {
+    eventsStatus.className = 'status-line err';
+    eventsStatus.textContent = 'Speichern fehlgeschlagen.';
+  }
+});
+
+} catch (e) {
+  console.error('Firebase-Initialisierung fehlgeschlagen:', e);
+  enableWithoutFirebase('Firebase konnte nicht gestartet werden.');
+}
+}
+
+// default date = today
+const today = new Date();
+
+// Mehrtägiges Event: Checkbox blendet das Enddatum-Feld ein/aus. Enddatum darf
+// nicht vor dem Startdatum liegen; solange der Nutzer es nicht selbst geändert
+// hat, folgt es automatisch dem Startdatum.
+let enddatumTouched = false;
+enddatumInput.addEventListener('input', () => { enddatumTouched = true; });
+
+function syncEnddatumBounds() {
+  enddatumInput.min = datumInput.value;
+  if (!enddatumTouched || enddatumInput.value < datumInput.value) {
+    enddatumInput.value = datumInput.value;
+  }
+}
+
+// Datum-Feld: bleibt auf dem aktuellen Tag, solange der Nutzer es nicht selbst
+// geändert hat. Browser stellen Formularwerte beim Zurück-Navigieren oder beim
+// Reaktivieren einer im Hintergrund pausierten Seite (bfcache) oft unverändert
+// wieder her, ohne das Skript neu laufen zu lassen - dadurch blieb bisher ein
+// veraltetes Datum stehen. pageshow (inkl. bfcache-Fall) und visibilitychange
+// gleichen das bei jedem erneuten Sichtbarwerden der Seite wieder ab.
+let datumTouched = false;
+datumInput.addEventListener('input', () => { datumTouched = true; });
+
+// Lokales Datum (YYYY-MM-DD) statt toISOString().slice(0,10): letzteres liefert
+// das UTC-Datum, das in Österreich (UTC+1/+2) rund um Mitternacht und bei
+// Tagesgrenz-Berechnungen (z. B. Übernacht-Zeitfenster) auf den falschen Tag
+// zeigt.
+function localISODate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function refreshDateDefaults() {
+  const now = new Date();
+  const nowStr = localISODate(now);
+  datumInput.min = nowStr;
+  const maxStr = localISODate(new Date(now.getTime() + 15*86400000));
+  datumInput.max = maxStr;
+  enddatumInput.max = maxStr;
+  if (!datumTouched) datumInput.value = nowStr;
+  syncEnddatumBounds();
+}
+refreshDateDefaults();
+window.addEventListener('pageshow', refreshDateDefaults);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshDateDefaults(); });
+
+datumInput.addEventListener('change', syncEnddatumBounds);
+
+multidayCheckbox.addEventListener('change', () => {
+  if (multidayCheckbox.checked) {
+    enddatumWrap.style.display = 'block';
+    syncEnddatumBounds();
+  } else {
+    enddatumWrap.style.display = 'none';
+  }
+});
+
+// default Zeitfenster: aktuelle Uhrzeit bis +6 Std. (nur solange nichts geändert wurde).
+// Reicht das über Mitternacht hinaus, läuft "bis" einfach in den nächsten Tag weiter -
+// das Event geht ja weiter; die Auswertung erkennt das automatisch (siehe renderResults).
+function pad2(n) { return String(n).padStart(2,'0'); }
+vonInput.value = `${pad2(today.getHours())}:${pad2(today.getMinutes())}`;
+const bisDt = new Date(today.getTime() + 6*3600000);
+bisInput.value = `${pad2(bisDt.getHours())}:${pad2(bisDt.getMinutes())}`;
+
+ortInput.addEventListener('input', () => {
+  selectedPlace = null;
+  clearTimeout(suggestTimer);
+  const q = ortInput.value.trim();
+  if (q.length < 2) { searchSeq++; suggBox.style.display='none'; return; }
+  suggestTimer = setTimeout(() => searchPlace(q), 350);
+});
+
+document.addEventListener('click', (e) => {
+  if (!suggBox.contains(e.target) && e.target !== ortInput) suggBox.style.display='none';
+});
+
+// --- Kartenauswahl & GPS ---
+const modeTextBtn = document.getElementById('modeTextBtn');
+const modeMapBtn = document.getElementById('modeMapBtn');
+const mapSection = document.getElementById('mapSection');
+const locateBtn = document.getElementById('locateBtn');
+const mapPickedEl = document.getElementById('mapPicked');
+let leafletMap = null, leafletMarker = null;
+
+modeTextBtn.addEventListener('click', () => {
+  modeTextBtn.classList.add('active');
+  modeMapBtn.classList.remove('active');
+  mapSection.style.display = 'none';
+});
+
+modeMapBtn.addEventListener('click', async () => {
+  modeMapBtn.classList.add('active');
+  modeTextBtn.classList.remove('active');
+  mapSection.style.display = 'block';
+  ensureMap();
+
+  // Bereits gewählten Ort / eingetippten Text gleich für die Karte übernehmen
+  if (selectedPlace) {
+    leafletMap.setView([selectedPlace.lat, selectedPlace.lon], 13);
+    setMapPoint(selectedPlace.lat, selectedPlace.lon, selectedPlace.name);
+  } else {
+    const q = ortInput.value.trim();
+    if (q) {
+      mapPickedEl.textContent = `Suche „${q}“ …`;
+      const found = await resolvePlaceFromText(q);
+      if (found) {
+        leafletMap.setView([found.lat, found.lon], 13);
+        setMapPoint(found.lat, found.lon, found.name);
+      } else {
+        mapPickedEl.textContent = 'Nicht gefunden – bitte Punkt manuell auf der Karte wählen.';
+      }
+    }
+  }
+});
+
+function ensureMap() {
+  if (leafletMap) { leafletMap.invalidateSize(); return; }
+  leafletMap = L.map('mapEl').setView([47.8, 16.0], 8); // Raum Wiener Neustadt als Standard
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap-Mitwirkende',
+    maxZoom: 18
+  }).addTo(leafletMap);
+  leafletMap.on('click', (e) => setMapPoint(e.latlng.lat, e.latlng.lng));
+}
+
+function setMapPoint(lat, lon, label) {
+  if (!leafletMarker) {
+    leafletMarker = L.marker([lat, lon]).addTo(leafletMap);
+  } else {
+    leafletMarker.setLatLng([lat, lon]);
+  }
+  leafletMap.panTo([lat, lon]);
+  mapPickedEl.textContent = 'Punkt wird bestimmt …';
+  reverseGeocode(lat, lon).then(name => {
+    const finalName = label || name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    selectedPlace = { name: finalName, lat, lon };
+    ortInput.value = finalName;
+    mapPickedEl.textContent = `Gewählt: ${finalName} (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+  });
+}
+
+async function reverseGeocode(lat, lon) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=14&accept-language=de`);
+    const data = await res.json();
+    if (!data || !data.address) return null;
+    const a = data.address;
+    const place = a.suburb || a.city_district || a.village || a.town || a.city || a.municipality;
+    const region = a.state;
+    return [place, region].filter(Boolean).join(', ');
+  } catch(e) {
+    return null;
+  }
+}
+
+// Löst Ortsnamen ODER vollständige Adressen (Straße, Hausnummer, PLZ, Ort) auf.
+// Erst Open-Meteo (schnell, gut für reine Ortsnamen), bei keinem Treffer als
+// Fallback Nominatim (OpenStreetMap), das auch Adressen bis auf Hausnummern-
+// Ebene versteht - für alle, die den Standort optional genauer angeben wollen.
+async function resolvePlaceFromText(q) {
+  if (!q) return null;
+  try {
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=de&format=json`);
+    const data = await res.json();
+    if (data.results && data.results.length) {
+      const r = data.results[0];
+      return { name: [r.name, r.admin1, r.country].filter(Boolean).join(', '), lat: r.latitude, lon: r.longitude };
+    }
+  } catch(e) {}
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&addressdetails=1&accept-language=de`);
+    const data = await res.json();
+    if (data && data.length) {
+      const r = data[0];
+      return { name: r.display_name, lat: parseFloat(r.lat), lon: parseFloat(r.lon) };
+    }
+  } catch(e) {}
+  return null;
+}
+
+locateBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    mapPickedEl.textContent = 'Geolocation wird von diesem Browser nicht unterstützt.';
+    return;
+  }
+  locateBtn.disabled = true;
+  mapPickedEl.textContent = 'Standort wird ermittelt …';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      modeMapBtn.click();
+      leafletMap.setView([latitude, longitude], 13);
+      setMapPoint(latitude, longitude);
+      locateBtn.disabled = false;
+    },
+    (err) => {
+      mapPickedEl.textContent = 'Standort konnte nicht ermittelt werden – bitte Berechtigung prüfen oder Punkt manuell auf der Karte wählen.';
+      locateBtn.disabled = false;
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+});
+
+let searchSeq = 0;
+async function searchPlace(q) {
+  // Laufnummer: langsame Antworten auf eine ältere Eingabe dürfen die
+  // Vorschläge zur neueren nicht mehr überschreiben.
+  const seq = ++searchSeq;
+  try {
+    const suggestions = [];
+    // Open-Meteo für Ortsnamen (schnell, saubere Stadt/Region-Labels)
+    try {
+      const om = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=de&format=json`).then(r => r.json());
+      (om.results || []).forEach(r => {
+        suggestions.push({
+          label: [r.name, r.admin1, r.country].filter(Boolean).join(', '),
+          lat: r.latitude, lon: r.longitude
+        });
+      });
+    } catch (e) {}
+
+    // Nominatim (vollständige Adressen) nur bei adressartiger Eingabe (enthält
+    // eine Zahl, z. B. Hausnummer/PLZ) oder wenn Open-Meteo nichts kennt, und
+    // erst nach einer kurzen Tipp-Pause: die Nominatim-Nutzungsregeln verbieten
+    // Abfragen bei jedem Tastendruck, bei Verstößen droht eine IP-Sperre.
+    if (/\d/.test(q) || !suggestions.length) {
+      await new Promise(r => setTimeout(r, 600));
+      if (seq !== searchSeq) return;
+      try {
+        const nom = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1&accept-language=de`).then(r => r.json());
+        if (Array.isArray(nom)) {
+          nom.forEach(r => suggestions.push({ label: r.display_name, lat: parseFloat(r.lat), lon: parseFloat(r.lon) }));
+        }
+      } catch (e) {}
+    }
+
+    if (seq !== searchSeq) return;
+    if (!suggestions.length) { suggBox.style.display='none'; return; }
+
+    suggBox.innerHTML = '';
+    suggestions.slice(0, 8).forEach(s => {
+      const btn = document.createElement('button');
+      btn.textContent = s.label;
+      btn.addEventListener('click', () => {
+        selectedPlace = { name: s.label, lat: s.lat, lon: s.lon };
+        ortInput.value = s.label;
+        suggBox.style.display='none';
+      });
+      suggBox.appendChild(btn);
+    });
+    suggBox.style.display='block';
+  } catch(e) {
+    suggBox.style.display='none';
+  }
+}
+
+// Eigener Bestätigungsdialog im App-Design statt des nativen Browser-confirm()
+// (der zeigt die Domain statt des Firmenlogos und lässt sich nicht stylen).
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function customConfirm(message, confirmLabel) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    // message enthält den Event-Namen (Freitext) -> escapen, damit z. B. "<" im
+    // Namen nicht als HTML interpretiert wird.
+    overlay.innerHTML = `
+      <div class="confirm-box">
+        <img src="Firmenlogo.png" alt="" class="confirm-logo">
+        <p class="confirm-message">${escapeHtml(message)}</p>
+        <div class="confirm-actions">
+          <button type="button" class="confirm-cancel">Abbrechen</button>
+          <button type="button" class="confirm-ok">${confirmLabel || 'Löschen'}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    function close(result) {
+      document.body.removeChild(overlay);
+      resolve(result);
+    }
+    overlay.querySelector('.confirm-cancel').addEventListener('click', () => close(false));
+    overlay.querySelector('.confirm-ok').addEventListener('click', () => close(true));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+  });
+}
+
+function weatherIcon(code) {
+  if (code === 0) return '☀️';
+  if (code === 1) return '🌤️';
+  if (code === 2) return '⛅';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫️';
+  if (code >= 51 && code <= 57) return '🌦️';
+  if (code >= 61 && code <= 67) return '🌧️';
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return '🌨️';
+  if (code === 80) return '🌦️';
+  if (code === 81 || code === 82) return '🌧️';
+  if (code >= 95) return '⛈️';
+  return '❔';
+}
+
+function weatherCodeInfo(code) {
+  const map = {
+    0:['Klar','g'],1:['Meist klar','g'],2:['Wolkig','g'],3:['Bedeckt','a'],
+    45:['Nebel','a'],48:['Nebel, reifbildend','a'],
+    51:['Leichter Sprühregen','a'],53:['Sprühregen','a'],55:['Starker Sprühregen','r'],
+    56:['Gefrierender Sprühregen','r'],57:['Gefrierender Sprühregen stark','r'],
+    61:['Leichter Regen','a'],63:['Regen','r'],65:['Starker Regen','r'],
+    66:['Gefrierender Regen','r'],67:['Gefrierender Regen stark','r'],
+    71:['Leichter Schneefall','r'],73:['Schneefall','r'],75:['Starker Schneefall','r'],
+    77:['Schneegriesel','a'],
+    80:['Leichte Regenschauer','a'],81:['Regenschauer','r'],82:['Heftige Regenschauer','r'],
+    85:['Leichte Schneeschauer','r'],86:['Starke Schneeschauer','r'],
+    95:['Gewitter','r'],96:['Gewitter mit Hagel','r'],99:['Schweres Gewitter mit Hagel','r']
+  };
+  return map[code] || ['Unbekannt','a'];
+}
+
+function hourStatus(precipProb, precipMm, gust, code) {
+  const isThunder = code >= 95;
+  if (isThunder || precipProb >= 60 || precipMm >= 1.0 || gust >= 55) return 'r';
+  if (precipProb >= 30 || precipMm >= 0.2 || gust >= 35 || code === 3) return 'a';
+  return 'g';
+}
+
+checkBtn.addEventListener('click', runCheck);
+
+async function runCheck() {
+  statusLine.className = 'status-line';
+  statusLine.textContent = '';
+
+  if (!selectedPlace) {
+    // Text nicht per Vorschlag bestätigt - Ort oder Adresse selbst auflösen
+    const q = ortInput.value.trim();
+    if (!q) { statusLine.textContent = 'Bitte einen Ort eingeben.'; statusLine.className='status-line err'; return; }
+    statusLine.textContent = 'Ort/Adresse wird gesucht …';
+    const found = await resolvePlaceFromText(q);
+    if (!found) {
+      statusLine.textContent = 'Ort/Adresse nicht gefunden. Bitte aus den Vorschlägen wählen oder genauer eingeben.';
+      statusLine.className='status-line err';
+      return;
+    }
+    selectedPlace = found;
+  }
+
+  if (!datumInput.value || !vonInput.value || !bisInput.value) {
+    statusLine.textContent = 'Bitte Datum und Zeitfenster vollständig angeben.';
+    statusLine.className='status-line err';
+    return;
+  }
+  if (vonInput.value === bisInput.value) {
+    statusLine.textContent = 'Start und Ende des Zeitfensters dürfen nicht gleich sein.';
+    statusLine.className='status-line err';
+    return;
+  }
+  if (multidayCheckbox.checked) {
+    if (!enddatumInput.value) {
+      statusLine.textContent = 'Bitte ein Enddatum für das mehrtägige Event angeben.';
+      statusLine.className='status-line err';
+      return;
+    }
+    if (enddatumInput.value < datumInput.value) {
+      statusLine.textContent = 'Das Enddatum darf nicht vor dem Startdatum liegen.';
+      statusLine.className='status-line err';
+      return;
+    }
+  }
+
+  checkBtn.disabled = true;
+  statusLine.textContent = 'Wetterdaten werden geladen …';
+  statusLine.className = 'status-line';
+
+  try {
+    const MODEL_LIST = 'best_match,icon_d2,ecmwf_ifs04,gfs_seamless,geosphere_arome_austria,arome_france';
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${selectedPlace.lat}&longitude=${selectedPlace.lon}` +
+      `&hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,wind_speed_10m,wind_gusts_10m,weather_code` +
+      `&current=temperature_2m,precipitation,cloud_cover,wind_gusts_10m,weather_code,is_day` +
+      `&daily=sunrise,sunset` +
+      `&models=${MODEL_LIST}&timezone=auto&forecast_days=16`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('API-Fehler');
+    const data = await res.json();
+
+    // C-LAEF AlpeAdria (1km) nur innerhalb Österreichs und für die nächsten ca. 60 Std. verfügbar
+    const targetStartMs = new Date(`${datumInput.value}T${vonInput.value}:00`).getTime();
+    const hoursUntilStart = (targetStartMs - Date.now()) / 3600000;
+    let claefMap = null;
+    if (isInAustria(selectedPlace.lat, selectedPlace.lon) && hoursUntilStart <= 60 && hoursUntilStart >= -24) {
+      claefMap = await fetchClaefHourlyMap(selectedPlace.lat, selectedPlace.lon);
+    }
+
+    renderResults(data, claefMap);
+    statusLine.textContent = '';
+
+    const radarLink = document.getElementById('radarLink');
+    radarLink.href = `https://www.windy.com/?radar,${selectedPlace.lat.toFixed(4)},${selectedPlace.lon.toFixed(4)},9`;
+    radarLink.style.display = 'inline-flex';
+
+    loadGeosphereLive(selectedPlace.lat, selectedPlace.lon);
+  } catch(e) {
+    statusLine.textContent = 'Wetterdaten konnten nicht geladen werden. Bitte später erneut versuchen.';
+    statusLine.className='status-line err';
+  } finally {
+    checkBtn.disabled = false;
+  }
+}
+
+function renderResults(data, claefMap) {
+  const chosenDate = datumInput.value;
+  const vonH = vonInput.value;
+  const bisH = bisInput.value;
+  const isToday = chosenDate === localISODate(new Date());
+
+  const h = data.hourly;
+  // best_match liefert bei models=... nur gesuffixte Felder; auf die Basis-Keys zurücklegen
+  Object.keys(h).forEach(key => {
+    if (key.endsWith('_best_match')) h[key.replace('_best_match', '')] = h[key];
+  });
+  // gleiche Gesuffixt-Eigenheit betrifft bei mehreren Modellen auch den daily-Block
+  // (also auch sunrise/sunset, obwohl die eigentlich astronomisch und modellunabhängig sind)
+  if (data.daily) {
+    Object.keys(data.daily).forEach(key => {
+      if (key.endsWith('_best_match')) data.daily[key.replace('_best_match', '')] = data.daily[key];
+    });
+  }
+
+  // Zeitfenster-Ende bestimmen: entweder explizit gewähltes Enddatum (mehrtägiges
+  // Event) oder - falls "bis" zeitlich vor "von" liegt - automatisch der nächste
+  // Kalendertag. Der Vergleich läuft rein über die ISO-Zeitstrings (sortieren
+  // chronologisch korrekt), das deckt Übernacht- wie Mehrtages-Fenster gleich ab.
+  const isMultiday = multidayCheckbox.checked && !!enddatumInput.value;
+  const endDate = isMultiday
+    ? enddatumInput.value
+    : (bisH < vonH
+        ? localISODate(new Date(new Date(chosenDate + 'T00:00:00').getTime() + 86400000))
+        : chosenDate);
+  const spansMultipleDays = endDate !== chosenDate;
+  const startStr = `${chosenDate}T${vonH}`;
+  const endStr = `${endDate}T${bisH}`;
+
+  // filter hourly entries within chosen date + window
+  const times = h.time;
+  const idxs = [];
+  for (let i=0;i<times.length;i++){
+    const t = times[i]; // "YYYY-MM-DDTHH:MM"
+    if (t >= startStr && t <= endStr) idxs.push(i);
+  }
+
+  const windowLabel = spansMultipleDays
+    ? `${formatDate(chosenDate)}, ${vonH} Uhr – ${formatDate(endDate)}, ${bisH} Uhr`
+    : `${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`;
+  document.getElementById('resultOrt').textContent = `${selectedPlace.name} — ${windowLabel}`;
+  const liveBadge = document.getElementById('liveBadge');
+  liveBadge.style.display = isToday ? 'inline-block' : 'none';
+  document.getElementById('updatedNote').textContent = 'Abgerufen: ' + new Date().toLocaleString('de-AT');
+
+  const periodBox = document.getElementById('periodBox');
+  const methodBox = document.getElementById('methodBox');
+
+  if (!idxs.length) {
+    document.getElementById('metricGrid').innerHTML = '';
+    document.getElementById('hoursTable').innerHTML = '';
+    periodBox.innerHTML = '';
+    methodBox.style.display = 'none';
+    setVerdict('a','Keine Daten für dieses Fenster','Für den gewählten Zeitraum liegen keine Stundenwerte vor. Bitte Datum oder Zeitfenster prüfen (Vorschau reicht 16 Tage voraus).');
+    resultsEl.style.display = 'block';
+    return;
+  }
+
+  // Modellvergleich: Streuung von Temperatur/Niederschlag/Wind über die 5 Einzelmodelle
+  const confidence = calculateModelConfidence(h, idxs);
+
+  // echte Sonnenuntergangszeit (Astronomie, nicht modellabhängig) je Kalendertag im Fenster.
+  // Robust gegen Modell-Suffixe im Feldnamen (z. B. "sunset_best_match" statt "sunset"),
+  // falls Open-Meteo bei models=... auch modellunabhängige Felder suffixt.
+  const dailySunsetMap = {};
+  if (data.daily && data.daily.time) {
+    const sunsetKey = Object.keys(data.daily).find(k => k === 'sunset' || k.startsWith('sunset_'));
+    const sunsetArr = sunsetKey ? data.daily[sunsetKey] : null;
+    if (sunsetArr) {
+      data.daily.time.forEach((d, i) => {
+        const s = sunsetArr[i];
+        if (s) dailySunsetMap[d] = s.slice(11,16);
+      });
+    }
+  }
+
+  // aggregate
+  let maxPrecipProb=0, sumPrecip=0, maxGust=0, minTemp=999, maxTemp=-999, worstCode=0, avgCloud=0;
+  let claefUsed = false;
+  let anyAfterSunset = false;
+  const rows = idxs.map(i => {
+    const code = h.weather_code[i];
+    const prob = h.precipitation_probability ? h.precipitation_probability[i] : null;
+    let mm = h.precipitation[i];
+    let gust = h.wind_gusts_10m[i];
+    const temp = h.temperature_2m[i];
+    const cloud = h.cloud_cover[i];
+
+    // C-LAEF AlpeAdria (1km, GeoSphere): verfeinert Niederschlag und Windböen, wo verfügbar
+    let claefFlag = false;
+    const claef = claefLookup(claefMap, h.time[i]);
+    if (claef) {
+      if (claef.rain !== undefined) { mm = claef.rain; claefFlag = true; }
+      if (claef.gust !== undefined) { gust = claef.gust; claefFlag = true; }
+      if (claefFlag) claefUsed = true;
+    }
+
+    maxPrecipProb = Math.max(maxPrecipProb, prob ?? 0);
+    sumPrecip += mm;
+    maxGust = Math.max(maxGust, gust);
+    minTemp = Math.min(minTemp, temp);
+    maxTemp = Math.max(maxTemp, temp);
+    avgCloud += cloud;
+    if (code >= 95) worstCode = Math.max(worstCode, code);
+    const status = hourStatus(prob ?? 0, mm, gust, code);
+    const riskScore = (prob ?? 0) + mm * 15 + gust * 0.6 + (code >= 95 ? 60 : 0);
+    const dateStr = h.time[i].slice(0,10);
+    const hourLabel = h.time[i].slice(11,16);
+    const rowSunset = dailySunsetMap[dateStr];
+    if (rowSunset && hourLabel > rowSunset) anyAfterSunset = true;
+    const timeLabel = spansMultipleDays
+      ? `${dateStr.slice(8,10)}.${dateStr.slice(5,7)}. ${h.time[i].slice(11,16)}`
+      : h.time[i].slice(11,16);
+    return { time: timeLabel, temp, cloud, prob, mm, gust, code, status, riskScore, claefFlag };
+  });
+  avgCloud = Math.round(avgCloud / rows.length);
+
+  // metrics
+  const metricGrid = document.getElementById('metricGrid');
+  metricGrid.innerHTML = '';
+  addMetric(metricGrid, 'Temperatur', `${Math.round(minTemp)}–${Math.round(maxTemp)} °C`, false);
+  addMetric(metricGrid, 'Bewölkung (Ø)', `${avgCloud} %`, false);
+  addMetric(metricGrid, 'Niederschlagswahrsch.', `${maxPrecipProb} %`, maxPrecipProb>=50);
+  addMetric(metricGrid, 'Niederschlag gesamt', `${sumPrecip.toFixed(1)} mm`, sumPrecip>=1);
+  addMetric(metricGrid, 'Windböen (max.)', `${Math.round(maxGust)} km/h`, maxGust>=50);
+  addMetric(metricGrid, 'Gewitterrisiko', worstCode>=95 ? 'vorhanden' : 'keines', worstCode>=95);
+  addMetric(metricGrid, 'Prognose-Verlässlichkeit', confidence.pct != null ? `${confidence.pct} %` : '–', confidence.pct != null && confidence.pct < 60);
+
+  // echte astronomische Sonnenuntergangszeit (kein Modell, sondern Berechnung) -
+  // relevant für die Outdoor/Indoor-Entscheidung bei Abendterminen. Bei mehrtägigen
+  // Events wird jeder Tag im Fenster einzeln aufgeführt, nicht nur erster/letzter Tag.
+  const sunsetDates = [];
+  {
+    let d = new Date(chosenDate + 'T00:00:00');
+    const endD = new Date(endDate + 'T00:00:00');
+    while (d.getTime() <= endD.getTime()) {
+      sunsetDates.push(localISODate(d));
+      d = new Date(d.getTime() + 86400000);
+    }
+  }
+  const sunsetParts = sunsetDates
+    .map(ds => dailySunsetMap[ds] ? { date: ds, time: dailySunsetMap[ds] } : null)
+    .filter(Boolean);
+  let sunsetLabel = '–';
+  if (sunsetParts.length) {
+    sunsetLabel = spansMultipleDays
+      ? sunsetParts.map(p => `${p.date.slice(8,10)}.${p.date.slice(5,7)}. ${p.time} Uhr`).join(' · ')
+      : `${sunsetParts[0].time} Uhr`;
+  }
+  addMetric(metricGrid, 'Sonnenuntergang', sunsetLabel, anyAfterSunset);
+
+  // bester zusammenhängender Zeitraum (status 'g')
+  let bestStart = -1, bestLen = 0, curStart=-1, curLen=0;
+  rows.forEach((r,i) => {
+    if (r.status==='g') { if(curStart===-1) curStart=i; curLen++; }
+    else { if (curLen>bestLen){bestLen=curLen;bestStart=curStart;} curStart=-1; curLen=0; }
+  });
+  if (curLen>bestLen){bestLen=curLen;bestStart=curStart;}
+
+  // kritischster Zeitraum: längster zusammenhängender 'r'-Block, sonst 'a'-Block, sonst einzelne Risiko-Spitze
+  function longestRun(statuses) {
+    let s=-1, l=0, cs=-1, cl=0;
+    rows.forEach((r,i) => {
+      if (statuses.includes(r.status)) { if(cs===-1) cs=i; cl++; }
+      else { if (cl>l){l=cl;s=cs;} cs=-1; cl=0; }
+    });
+    if (cl>l){l=cl;s=cs;}
+    return { start:s, len:l };
+  }
+  let worst = longestRun(['r']);
+  if (worst.len === 0) worst = longestRun(['a']);
+  let worstPeakIdx = -1;
+  if (worst.len === 0) {
+    rows.forEach((r,i) => { if (worstPeakIdx===-1 || r.riskScore > rows[worstPeakIdx].riskScore) worstPeakIdx = i; });
+  }
+
+  // Warum ist genau das der kritischste Zeitraum? Ausschlaggebende Faktoren zusammenfassen.
+  function reasonForRange(startIdx, len) {
+    let maxProb = 0, sumMm = 0, maxGust = 0, worstCodeInRange = 0;
+    for (let i = startIdx; i < startIdx + len; i++) {
+      const r = rows[i];
+      maxProb = Math.max(maxProb, r.prob ?? 0);
+      sumMm += r.mm;
+      maxGust = Math.max(maxGust, r.gust);
+      if (r.code >= 95) worstCodeInRange = Math.max(worstCodeInRange, r.code);
+    }
+    const reasons = [];
+    if (worstCodeInRange >= 95) reasons.push('Gewitterrisiko');
+    if (maxProb >= 30) reasons.push(`Niederschlagswahrsch. bis ${maxProb}%`);
+    if (sumMm >= 0.2) reasons.push(`${sumMm.toFixed(1)} mm Niederschlag`);
+    if (maxGust >= 35) reasons.push(`Böen bis ${Math.round(maxGust)} km/h`);
+    if (!reasons.length) reasons.push('erhöhte Bewölkung');
+    return reasons.join(', ');
+  }
+
+  // table
+  const table = document.getElementById('hoursTable');
+  let html = '<tr><th><span class="hl">Uhrzeit</span><span class="hs">Zeit</span></th><th class="c-dot"></th><th>Wetter</th><th>Temp.</th>' +
+    '<th class="c-cloud"><span class="hl">Wolken</span><span class="hs">☁️</span></th>' +
+    '<th>Regen %</th><th>mm</th><th>Böen km/h</th></tr>';
+  rows.forEach((r,i) => {
+    const [label] = weatherCodeInfo(r.code);
+    const dotClass = r.status;
+    const inBest = bestStart!==-1 && i>=bestStart && i<bestStart+bestLen;
+    const inWorst = worst.start!==-1 && i>=worst.start && i<worst.start+worst.len;
+    const rowClass = inBest ? 'best' : (inWorst || i===worstPeakIdx ? 'risk' : '');
+    html += `<tr class="${rowClass}">
+      <td class="t s-${dotClass}">${r.time}</td>
+      <td class="c-dot"><span class="dot ${dotClass}"></span></td>
+      <td class="wx" title="${label}"><span class="wx-ico">${weatherIcon(r.code)}</span><span class="wx-label">${label}</span></td>
+      <td>${Math.round(r.temp)}°C</td>
+      <td class="c-cloud">${r.cloud}%</td>
+      <td>${r.prob != null ? r.prob + '%' : '–'}</td>
+      <td>${r.mm.toFixed(1)}${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
+      <td>${Math.round(r.gust)}${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
+    </tr>`;
+  });
+  table.innerHTML = html;
+
+  // Bester / kritischster Zeitraum als eigene Zeilen
+  let periodHtml = '';
+  if (bestLen > 0) {
+    periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr</div>`;
+  } else {
+    periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> im Fenster keine durchgehend unkritische Phase erkennbar</div>`;
+  }
+  if (worst.len > 0) {
+    const reason = reasonForRange(worst.start, worst.len);
+    periodHtml += `<div class="period-line bad"><span class="dot r"></span><strong>Kritischster Zeitraum:</strong> ${rows[worst.start].time}–${rows[worst.start+worst.len-1].time} Uhr <span class="reason">(${reason})</span></div>`;
+  } else if (worstPeakIdx !== -1 && rows[worstPeakIdx].riskScore > 5) {
+    const reason = reasonForRange(worstPeakIdx, 1);
+    periodHtml += `<div class="period-line bad"><span class="dot a"></span><strong>Kritischster Zeitpunkt:</strong> ${rows[worstPeakIdx].time} Uhr <span class="reason">(${reason}, im Vergleich die ungünstigste Stunde im Fenster)</span></div>`;
+  } else {
+    periodHtml += `<div class="period-line bad"><span class="dot g"></span><strong>Kritischster Zeitraum:</strong> keiner – das ganze Fenster liegt im unkritischen Bereich</div>`;
+  }
+  periodBox.innerHTML = periodHtml;
+
+  // Modellvergleich & C-LAEF-Hinweis: als Methodik-Fußnote ganz unten, nicht in der Übersicht
+  let methodHtml = `<p><strong>Modellvergleich</strong> (best_match, ICON-D2, ECMWF IFS, GFS, AROME Austria, AROME France): ${confidence.text}</p>`;
+  if (claefUsed) {
+    methodHtml += `<p>¹ Niederschlag und Windböen für die markierten Stunden verfeinert durch <strong>C-LAEF AlpeAdria</strong> (GeoSphere Austria, 1&nbsp;km, nur nächste ca. 60&nbsp;Std.).</p>`;
+  }
+  methodBox.innerHTML = methodHtml;
+  methodBox.style.display = 'block';
+
+  // verdict
+  // Hinweistexte je nach tatsächlicher Ursache (Regen vs. Wind) formulieren, statt
+  // pauschal "Regenschirm", auch wenn z. B. nur starke Böen ohne Niederschlag vorliegen.
+  // Ab 0,2 mm (wie in der Stunden-Ampel) - vorher reichten schon Spuren wie 0,02 mm,
+  // die in der Übersicht als "0.0 mm" erscheinen, für einen Regenschirm-Hinweis.
+  const rainRisk = maxPrecipProb >= 30 || sumPrecip >= 0.2 || worstCode >= 95;
+  const windRisk = maxGust >= 35;
+  function riskAdvice() {
+    if (rainRisk && windRisk) return 'Regenschirme bzw. Unterstand griffbereit halten und Deko/Aufbauten gegen den Wind sichern.';
+    if (rainRisk) return 'Regenschirme oder ein Zelt bereithalten.';
+    if (windRisk) return `Kein Regen erwartet, aber Windböen bis ${Math.round(maxGust)} km/h – Deko, Kerzen und Aufbauten gut sichern.`;
+    return 'Ein Unterstand sollte trotzdem in der Nähe sein.';
+  }
+  if (worstCode >= 95 || maxPrecipProb >= 60 || sumPrecip >= 2 || maxGust >= 55) {
+    setVerdict('r','Indoor empfohlen',
+      bestLen>0
+        ? `Im gewählten Fenster überwiegt das Risiko (${windRisk && !rainRisk ? 'starker Wind' : 'Regen, Gewitter oder starker Wind'}). Am ehesten geeignet wäre ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr, aber auch dort keine Sicherheit.`
+        : `Über das gesamte Zeitfenster ist mit ${windRisk && !rainRisk ? 'starkem Wind' : 'Regen, Gewitter oder starkem Wind'} zu rechnen. Für den Outdoor-Teil aktuell keine sichere Phase erkennbar.`);
+  } else if (rainRisk || windRisk) {
+    setVerdict('a','Outdoor möglich, mit Plan B in Reichweite',
+      bestLen>0
+        ? `Die beste Phase liegt bei ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr. Für den Rest des Fensters: ${riskAdvice()}`
+        : `Leichtes Risiko über das ganze Fenster – Outdoor ist möglich. ${riskAdvice()}`);
+  } else {
+    setVerdict('g','Outdoor gut geeignet',
+      `Für ${vonH}–${bisH} Uhr sind kaum Störungen zu erwarten – Bewölkung, Regen und Wind liegen im unkritischen Bereich.`);
+  }
+
+  resultsEl.style.display = 'block';
+}
+
+// Streuung der 5 Einzelmodelle (ohne best_match) über Temperatur/Niederschlag/Wind je Stunde im Fenster
+const COMPARE_MODELS = ['icon_d2','ecmwf_ifs04','gfs_seamless','geosphere_arome_austria','arome_france'];
+function modelValues(h, feld, idx) {
+  return COMPARE_MODELS.map(m => h[`${feld}_${m}`]?.[idx]).filter(v => typeof v === 'number' && Number.isFinite(v));
+}
+function calculateModelConfidence(h, idxs) {
+  let totalScore = 0, validHours = 0;
+  idxs.forEach(idx => {
+    const span = a => a.length > 1 ? (Math.max(...a) - Math.min(...a)) : 0;
+    const temps = modelValues(h, 'temperature_2m', idx);
+    const rains = modelValues(h, 'precipitation', idx);
+    const winds = modelValues(h, 'wind_speed_10m', idx);
+    const tempDiff = span(temps), rainDiff = span(rains), windDiff = span(winds);
+    const tempScore = Math.max(0, 100 - (Math.max(0, tempDiff - 1.5) * 15));
+    const rainScore = Math.max(0, 100 - (Math.max(0, rainDiff - 0.5) * 12));
+    const windScore = Math.max(0, 100 - (Math.max(0, windDiff - 10) * 2));
+    if (temps.length > 1 || rains.length > 1 || winds.length > 1) {
+      totalScore += (tempScore * 0.3) + (rainScore * 0.4) + (windScore * 0.3);
+      validHours++;
+    }
+  });
+  if (validHours === 0) {
+    return { pct: null, text: 'Es liegen keine Vergleichsdaten weiterer Modelle vor.' };
+  }
+  const finalPct = Math.round(totalScore / validHours);
+  let text = 'Sehr gute Modellübereinstimmung für diesen Zeitraum.';
+  if (finalPct < 80) text = 'Leichte Unsicherheiten in der Prognose (Modelle weichen etwas ab).';
+  if (finalPct < 60) text = 'Hohe Unsicherheit: Die Modelle sind sich uneinig, der ungünstigste Fall ist real möglich.';
+  return { pct: finalPct, text: text };
+}
+
+function addMetric(grid, label, value, flag) {
+  const div = document.createElement('div');
+  div.className = 'metric';
+  div.innerHTML = `<div class="label">${label}</div><div class="value${flag?' flag':''}">${value}</div>`;
+  grid.appendChild(div);
+}
+
+function setVerdict(kind, title, text) {
+  const box = document.getElementById('verdictBox');
+  box.className = 'verdict ' + (kind==='g'?'good':kind==='a'?'warn':'bad');
+  document.getElementById('verdictMark').textContent = kind==='g' ? '✓' : kind==='a' ? '!' : '✕';
+  document.getElementById('verdictTitle').textContent = title;
+  document.getElementById('verdictText').textContent = text;
+}
+
+function formatDate(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  return d.toLocaleDateString('de-AT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+
+// --- GeoSphere Austria Live-Nowcast + Niederschlagswarnung 20 km ---
+
+function isInAustria(lat, lon) {
+  return lat >= 46.3 && lat <= 49.2 && lon >= 9.3 && lon <= 17.3;
+}
+
+// C-LAEF AlpeAdria (GeoSphere nwp-v2-1h-1km): hochauflösendes 1km-Modell, deckt nur
+// die nächsten ca. 60 Stunden ab. Wird NUR für Niederschlag und Wind (Böen) als
+// Verfeinerung der Open-Meteo-Werte verwendet, wo verfügbar - unsichtbar im
+// Hintergrund, außer einer kleinen Kennzeichnung in der Tabelle. Schlägt der Abruf
+// fehl, bleiben einfach die Open-Meteo-Werte unverändert (map bleibt null).
+async function fetchClaefHourlyMap(lat, lon) {
+  try {
+    const params = '10u,10v,10fg,rain';
+    const url = 'https://dataset.api.hub.geosphere.at/v1/timeseries/forecast/nwp-v2-1h-1km?lat_lon=' +
+      encodeURIComponent(lat.toFixed(5) + ',' + lon.toFixed(5)) +
+      '&parameters=' + params + '&output_format=geojson';
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const f = data?.features?.[0];
+    if (!f) return null;
+    const times = geoSphereTimestamps(data, f);
+    if (!times.length) return null;
+    const us = geoSphereValues(f, '10u');
+    const vs = geoSphereValues(f, '10v');
+    const gusts = geoSphereValues(f, '10fg');
+    const rains = geoSphereValues(f, 'rain');
+    const map = new Map();
+    times.forEach((t, i) => {
+      const hourEpoch = Math.floor(new Date(t).getTime() / 3600000);
+      const u = us[i], v = vs[i];
+      const entry = {
+        gust: Number.isFinite(gusts[i]) ? gusts[i] * 3.6 : undefined,
+        rain: Number.isFinite(rains[i]) ? rains[i] : undefined,
+        wind: (Number.isFinite(u) && Number.isFinite(v)) ? Math.sqrt(u * u + v * v) * 3.6 : undefined
+      };
+      if (entry.gust !== undefined || entry.rain !== undefined) map.set(hourEpoch, entry);
+    });
+    return map.size ? map : null;
+  } catch (e) {
+    return null;
+  }
+}
+function claefLookup(map, isoTime) {
+  if (!map) return null;
+  const hourEpoch = Math.floor(new Date(isoTime).getTime() / 3600000);
+  return map.get(hourEpoch) || null;
+}
+function geoSphereTimestamps(data, feature) {
+  const top = data?.timestamps || data?.time || data?.times;
+  if (Array.isArray(top) && top.length) return top;
+  const props = feature?.properties;
+  const inProps = props?.timestamps || props?.time || props?.times;
+  if (Array.isArray(inProps) && inProps.length) return inProps;
+  const params = props?.parameters || {};
+  for (const key of Object.keys(params)) {
+    const p = params[key];
+    const t = p?.timestamps || p?.time || p?.times;
+    if (Array.isArray(t) && t.length) return t;
+  }
+  return [];
+}
+function geoSphereValues(feature, param) {
+  const params = feature?.properties?.parameters;
+  if (!params) return [];
+  const keys = Object.keys(params);
+  const entry = params[param] || params[param.toUpperCase()] || params[param.toLowerCase()]
+    || (keys.length === 1 ? params[keys[0]] : null);
+  const data = entry?.data;
+  if (!Array.isArray(data)) return [];
+  if (data.length && Array.isArray(data[0])) return [];
+  return data;
+}
+
+
+const RING_DIRECTIONS = [
+  { deg: 0,   label: 'Norden' },
+  { deg: 45,  label: 'Nordosten' },
+  { deg: 90,  label: 'Osten' },
+  { deg: 135, label: 'Südosten' },
+  { deg: 180, label: 'Süden' },
+  { deg: 225, label: 'Südwesten' },
+  { deg: 270, label: 'Westen' },
+  { deg: 315, label: 'Nordwesten' }
+];
+
+function destinationPoint(lat, lon, bearingDeg, distKm) {
+  const R = 6371;
+  const brng = bearingDeg * Math.PI / 180;
+  const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distKm / R) + Math.cos(lat1) * Math.sin(distKm / R) * Math.cos(brng));
+  const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distKm / R) * Math.cos(lat1), Math.cos(distKm / R) - Math.sin(lat1) * Math.sin(lat2));
+  return [lat2 * 180 / Math.PI, ((lon2 * 180 / Math.PI) + 540) % 360 - 180];
+}
+
+function degToCompass(deg) {
+  const dirs = ['Norden','Nordosten','Osten','Südosten','Süden','Südwesten','Westen','Nordwesten'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+function circularDiff(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+async function loadGeosphereLive(lat, lon) {
+  const livePanel = document.getElementById('livePanel');
+  const liveGrid = document.getElementById('liveGrid');
+  const liveSub = document.getElementById('liveSub');
+  const warnBox = document.getElementById('precipWarning');
+
+  livePanel.style.display = 'block';
+  warnBox.style.display = 'none';
+
+  if (!isInAustria(lat, lon)) {
+    liveGrid.innerHTML = '';
+    liveSub.textContent = 'GeoSphere-Live-Nowcast deckt nur Österreich ab – für diesen Standort nicht verfügbar. Oben gelten die Open-Meteo-Vorschauwerte.';
+    return;
+  }
+
+  liveSub.textContent = 'Live-Werte werden geladen …';
+  liveGrid.innerHTML = '';
+
+  // 8 Himmelsrichtungen x 4 Entfernungen (5/10/15/20 km) - vorher wurde nur exakt
+  // auf dem 20-km-Ring geprüft, ein Schauer z. B. 8 km entfernt blieb unsichtbar.
+  const ring = [];
+  RING_DIRECTIONS.forEach(d => {
+    [5, 10, 15, 20].forEach(km => {
+      const [rlat, rlon] = destinationPoint(lat, lon, d.deg, km);
+      ring.push({ ...d, km, lat: rlat, lon: rlon });
+    });
+  });
+  const points = [{ label: 'Zentrum', deg: null, km: 0, lat, lon }, ...ring];
+
+  const params = ['rr','t2m','rh2m','ff','dd','fx'];
+  let url = 'https://dataset.api.hub.geosphere.at/v1/timeseries/forecast/nowcast-v1-15min-1km?';
+  url += params.map(p => `parameters=${p}`).join('&');
+  url += '&' + points.map(pt => `lat_lon=${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`).join('&');
+  url += '&output_format=geojson';
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('GeoSphere-API-Fehler');
+    const data = await res.json();
+    if (!data.features || !data.features.length) throw new Error('Keine Daten');
+
+    // Punkte den Features zuordnen (nächstgelegene Koordinate)
+    const matched = points.map(pt => {
+      let best = null, bestDist = Infinity;
+      data.features.forEach(f => {
+        const [flon, flat] = f.geometry.coordinates;
+        const dist = Math.hypot(flat - pt.lat, flon - pt.lon);
+        if (dist < bestDist) { bestDist = dist; best = f; }
+      });
+      return { ...pt, params: best ? best.properties.parameters : null };
+    });
+
+    const timestamps = data.timestamps || [];
+    const center = matched[0];
+    const ringMatched = matched.slice(1);
+
+    if (!center.params) throw new Error('Zentrum ohne Daten');
+
+    const rrC = center.params.rr ? center.params.rr.data : [];
+    const t2mC = center.params.t2m ? center.params.t2m.data : [];
+    const ffC = center.params.ff ? center.params.ff.data : [];
+    const ddC = center.params.dd ? center.params.dd.data : [];
+    const fxC = center.params.fx ? center.params.fx.data : [];
+
+    const nowIdx = 0;
+    const nowRr = rrC[nowIdx];
+    const nowT = t2mC[nowIdx];
+    // GeoSphere liefert Wind und Böen in m/s (laut API-Metadaten) -> in km/h umrechnen.
+    // Vorher wurden die m/s-Werte direkt als km/h angezeigt (ca. 3,6-fach zu niedrig).
+    const nowFf = ffC[nowIdx] != null ? ffC[nowIdx] * 3.6 : null;
+    const nowDd = ddC[nowIdx];
+    const nowFx = fxC[nowIdx] != null ? fxC[nowIdx] * 3.6 : null;
+
+    liveSub.textContent = timestamps[nowIdx]
+      ? `Stand: ${new Date(timestamps[nowIdx]).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'})} Uhr, Punkt ${lat.toFixed(3)}, ${lon.toFixed(3)}`
+      : 'Live-Werte für den genauen Punkt.';
+
+    liveGrid.innerHTML = '';
+    addMetric(liveGrid, 'Temperatur', nowT != null ? `${Math.round(nowT)} °C` : '–', false);
+    addMetric(liveGrid, 'Niederschlag jetzt', nowRr != null ? `${nowRr.toFixed(1)} mm/15min` : '–', nowRr > 0.1);
+    addMetric(liveGrid, 'Wind', (nowFf != null && nowDd != null) ? `${Math.round(nowFf)} km/h aus ${degToCompass(nowDd)}` : '–', false);
+    addMetric(liveGrid, 'Böen', nowFx != null ? `${Math.round(nowFx)} km/h` : '–', nowFx >= 50);
+
+    // Niederschlagswarnung im Umkreis 20 km
+    // Am Punkt selbst: erster Zeitschritt mit Niederschlag über die ganze Nowcast-
+    // Reichweite (GeoSphere: 13 Schritte à 15 Min. = ca. 3 Stunden).
+    const horizonH = Math.max(1, Math.round(((rrC.length || 13) - 1) * 15 / 60));
+    let localOnsetIdx = -1;
+    for (let i = 0; i < rrC.length; i++) {
+      if (rrC[i] != null && rrC[i] > 0.1) { localOnsetIdx = i; break; }
+    }
+
+    // Im Umkreis: wo fällt JETZT Niederschlag (gibt Entfernung und Richtung)?
+    const wetRing = ringMatched.filter(r => r.params && r.params.rr && r.params.rr.data && r.params.rr.data[0] > 0.1);
+    let sourceDir = null;
+    if (wetRing.length) {
+      // Bevorzugt Niederschlag aus der Richtung, aus der der Wind weht (zieht am
+      // ehesten heran), davon der nächstgelegene; sonst einfach der nächstgelegene.
+      const upwind = nowDd != null ? wetRing.filter(w => circularDiff(w.deg, nowDd) <= 67.5) : [];
+      const pool = upwind.length ? upwind : wetRing;
+      sourceDir = pool.slice().sort((a, b) => a.km - b.km)[0];
+    }
+    const nearestKm = wetRing.length ? Math.min(...wetRing.map(w => w.km)) : null;
+    const wetLabels = [...new Set(wetRing.slice().sort((a, b) => a.km - b.km).map(w => w.label))];
+
+    if (nowRr > 0.1) {
+      warnBox.className = 'precip-warning alert';
+      warnBox.innerHTML = `<strong>Niederschlag jetzt vor Ort</strong>Am gewählten Punkt fällt laut Nowcast bereits Niederschlag.`;
+      warnBox.style.display = 'block';
+    } else if (localOnsetIdx > 0) {
+      const minutes = localOnsetIdx * 15;
+      const onsetTs = timestamps[localOnsetIdx];
+      const clock = onsetTs ? ` (ca. ${new Date(onsetTs).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })} Uhr)` : '';
+      const dirText = sourceDir ? ` – aktuell ca. ${sourceDir.km} km entfernt im ${sourceDir.label}` : '';
+      warnBox.className = 'precip-warning alert';
+      warnBox.innerHTML = `<strong>Niederschlag nähert sich</strong>Nowcast erwartet Niederschlag am gewählten Punkt in ca. ${minutes} Minuten${clock}${dirText}.`;
+      warnBox.style.display = 'block';
+    } else if (wetRing.length) {
+      warnBox.className = 'precip-warning info';
+      warnBox.innerHTML = `<strong>Niederschlag in der Nähe</strong>Im 20-km-Umkreis wird aktuell Niederschlag erfasst (nächster ca. ${nearestKm} km entfernt; ${wetLabels.join(', ')}), erreicht den gewählten Punkt laut Nowcast in den nächsten ${horizonH} Stunden aber nicht.`;
+      warnBox.style.display = 'block';
+    } else {
+      warnBox.className = 'precip-warning info';
+      warnBox.innerHTML = `<strong>Kein Niederschlag erkennbar</strong>Aktuell kein Niederschlag im 20-km-Umkreis, und am Punkt selbst erwartet der Nowcast auch in den nächsten ${horizonH} Stunden keinen.`;
+      warnBox.style.display = 'block';
+    }
+  } catch (e) {
+    liveSub.textContent = 'Live-Nowcast derzeit nicht abrufbar (GeoSphere-Dienst kurzzeitig nicht erreichbar). Oben gelten die Open-Meteo-Vorschauwerte.';
+    liveGrid.innerHTML = '';
+  }
+}
+</script>
+</body>
+</html>

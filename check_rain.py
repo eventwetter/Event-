@@ -505,9 +505,14 @@ def run():
         sub = doc.to_dict() or {}
         stat['gesamt'] += 1
         try:
-            token = sub.get('token')
+            # Mehrere Geräte pro Event (Array "tokens"); das alte Einzelfeld "token"
+            # aus der Zeit vor der Umstellung wird weiterhin mitbedient.
+            tokens = [t for t in (sub.get('tokens') or []) if t]
+            legacy_token = sub.get('token')
+            if legacy_token and legacy_token not in tokens:
+                tokens.append(legacy_token)
             lat, lon = sub.get('lat'), sub.get('lon')
-            if sub.get('finished') or not token or lat is None or lon is None:
+            if sub.get('finished') or not tokens or lat is None or lon is None:
                 continue
 
             start_dt, end_dt = parse_event_window(sub)
@@ -563,6 +568,13 @@ def run():
                     emoji = '⚠️' if high else '🌧️'
                     title = f"{emoji} Niederschlag am Eventort – {ort}"
                     body = f"{rain_desc} hat den Ort jetzt erreicht ({clock_txt})."
+                elif dist_km <= 1:
+                    # Zelle bildet sich direkt über dem Ort (kein heranziehender Zug) -
+                    # "noch ca. 0 km entfernt" wäre hier sinnlos.
+                    emoji = '⚠️' if high else '🌦️'
+                    title = f"{emoji} Niederschlag erwartet – {ort}"
+                    body = (f"{rain_desc} direkt am Eventort erwartet. "
+                            f"Voraussichtlicher Beginn: {clock_txt} ({rel_txt}).")
                 else:
                     emoji = '⚠️' if high else '🌦️'
                     title = f"{emoji} Niederschlag nähert sich – {ort}"
@@ -580,19 +592,30 @@ def run():
 
                 update_data['last_weather_state'] = stage
                 if send_it:
-                    try:
-                        send_push(title, body, token)
-                        stat['pushes'] += 1
+                    sent_ok = 0
+                    dead = []
+                    for tok in tokens:
+                        try:
+                            send_push(title, body, tok)
+                            sent_ok += 1
+                        except Exception as fe:
+                            print(f"    Push-Fehler: {fe}")
+                            if is_dead_token(fe):
+                                dead.append(tok)
+                    stat['pushes'] += sent_ok
+                    if dead:
+                        print(f"    {len(dead)} ungültige(r) Token - wird entfernt ({doc.id}).")
+                        update_data['tokens'] = firestore.ArrayRemove(dead)
+                        if legacy_token in dead:
+                            update_data['token'] = firestore.DELETE_FIELD
+                    if sent_ok:
                         update_data['last_alert_key'] = alert_key
                         update_data['last_alert_ts'] = now_utc.isoformat()
                         update_data['last_alert_title'] = title
-                    except Exception as fe:
-                        print(f"    Push-Fehler: {fe}")
+                    else:
+                        # Kein Gerät erreicht -> Zustand nicht fortschreiben, damit es
+                        # beim nächsten Lauf erneut versucht wird.
                         update_data.pop('last_weather_state', None)
-                        if is_dead_token(fe):
-                            print(f"    Token ungültig - wird entfernt ({doc.id}).")
-                            db.collection('event_subscriptions').document(doc.id).update({'token': None})
-                            continue
             else:
                 if last_state != 'stable':
                     update_data['last_weather_state'] = 'stable'
