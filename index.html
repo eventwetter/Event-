@@ -1038,6 +1038,10 @@ try {
   // dieses Geräts ersetzt.
   async function refreshFcmToken() {
     if (!messaging) return;
+    // getToken() fragt selbst nach der Benachrichtigungs-Berechtigung, wenn noch
+    // keine erteilt wurde - beim App-Start soll aber kein Popup erscheinen.
+    // Nur aktualisieren, wenn Push auf diesem Gerät schon erlaubt ist.
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
     try {
       const newToken = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
       if (!newToken) return;
@@ -1072,6 +1076,8 @@ try {
 
   async function refreshPushButtonState(id) {
     activeEventId = id;
+    pushToggleBtn.classList.remove('active');
+    pushToggleBtn.textContent = 'Push aktivieren';
     if (!id) {
       pushToggleBtn.disabled = true;
       pushToggleBtn.textContent = 'Push aktivieren';
@@ -1081,6 +1087,7 @@ try {
     pushToggleBtn.disabled = false;
     try {
       const snap = await db.collection('event_subscriptions').doc(id).get();
+      if (id !== activeEventId) return; // inzwischen anderes Event geladen
       // "Aktiv" heißt: DIESES Gerät ist eingetragen - andere Team-Geräte haben
       // ihr eigenes Abo im selben Event-Dokument.
       const myToken = localStorage.getItem('eventWetterFcmToken');
@@ -1089,7 +1096,7 @@ try {
       pushToggleBtn.textContent = subscribed ? '🔔 Push aktiv – deaktivieren' : 'Push aktivieren';
       pushToggleBtn.classList.toggle('active', subscribed);
     } catch (e) {
-      pushToggleBtn.textContent = 'Push aktivieren';
+      if (id === activeEventId) pushToggleBtn.textContent = 'Push aktivieren';
     }
   }
 
@@ -1372,7 +1379,10 @@ async function loadEvents() {
       eventSelect.appendChild(grp);
     }
     if (editingEventId && !eventsCache[editingEventId]) setEditing(null);
-    else if (editingEventId) eventSelect.value = editingEventId;
+    else if (editingEventId) {
+      eventSelect.value = editingEventId;
+      loadEventBtn.disabled = deleteEventBtn.disabled = !eventSelect.value;
+    }
   } catch (e) {
     eventSelect.innerHTML = '<option value="">Events konnten nicht geladen werden</option>';
   }
@@ -1448,6 +1458,18 @@ async function saveEvent(asNew) {
   if (!eventName.value.trim()) {
     eventsStatus.className = 'status-line err';
     eventsStatus.textContent = 'Bitte einen Namen für das Event eingeben.';
+    return;
+  }
+  const saveErr = !datumInput.value || !vonInput.value || !bisInput.value
+    ? 'Bitte Datum und Zeitfenster vollständig angeben.'
+    : vonInput.value === bisInput.value
+      ? 'Start und Ende des Zeitfensters dürfen nicht gleich sein.'
+      : (multidayCheckbox.checked && enddatumInput.value && enddatumInput.value < datumInput.value)
+        ? 'Das Enddatum darf nicht vor dem Startdatum liegen.'
+        : '';
+  if (saveErr) {
+    eventsStatus.className = 'status-line err';
+    eventsStatus.textContent = saveErr;
     return;
   }
   eventsStatus.textContent = 'Speichert …';
@@ -1547,11 +1569,21 @@ function localISODate(date) {
   return `${y}-${m}-${d}`;
 }
 
+// Kalendertage addieren - rein auf dem Datum (UTC-Rechnung), daher sicher bei der
+// Zeitumstellung. Vorher wurde zu lokaler Mitternacht 24 h addiert; am Tag der
+// Umstellung auf Winterzeit (z. B. 25.10.2026) ergab das denselben Tag 23:00 ->
+// Endlosschleife bei mehrtägigen Events bzw. "Keine Daten" bei Übernacht-Fenstern.
+function addDaysISO(iso, n) {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 function refreshDateDefaults() {
   const now = new Date();
   const nowStr = localISODate(now);
   datumInput.min = nowStr;
-  const maxStr = localISODate(new Date(now.getTime() + 15*86400000));
+  const maxStr = addDaysISO(nowStr, 15);
   datumInput.max = maxStr;
   enddatumInput.max = maxStr;
   if (!datumTouched) datumInput.value = nowStr;
@@ -1630,7 +1662,9 @@ modeMapBtn.addEventListener('click', async () => {
     const q = ortInput.value.trim();
     if (q) {
       mapPickedEl.textContent = `Suche „${q}“ …`;
+      const seqAtStart = mapSeq;
       const found = await resolvePlaceFromText(q);
+      if (seqAtStart !== mapSeq) return; // inzwischen Punkt per Klick/GPS gesetzt
       if (found) {
         leafletMap.setView([found.lat, found.lon], 13);
         setMapPoint(found.lat, found.lon, found.name);
@@ -1651,7 +1685,9 @@ function ensureMap() {
   leafletMap.on('click', (e) => setMapPoint(e.latlng.lat, e.latlng.lng));
 }
 
+let mapSeq = 0;
 function setMapPoint(lat, lon, label) {
+  const mySeq = ++mapSeq;
   if (!leafletMarker) {
     leafletMarker = L.marker([lat, lon]).addTo(leafletMap);
   } else {
@@ -1660,6 +1696,7 @@ function setMapPoint(lat, lon, label) {
   leafletMap.panTo([lat, lon]);
   mapPickedEl.textContent = 'Punkt wird bestimmt …';
   reverseGeocode(lat, lon).then(name => {
+    if (mySeq !== mapSeq) return; // inzwischen anderer Punkt gewählt
     const finalName = label || name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
     selectedPlace = { name: finalName, lat, lon };
     ortInput.value = finalName;
@@ -1855,6 +1892,9 @@ function hourStatus(precipProb, precipMm, gust, code) {
 
 checkBtn.addEventListener('click', runCheck);
 
+let checkSeq = 0;   // jede Prüfung bekommt eine Nummer; nur die neueste wird angezeigt
+let checkCtx = null; // festgehaltene Eingaben der laufenden Prüfung
+
 async function runCheck() {
   statusLine.className = 'status-line';
   statusLine.textContent = '';
@@ -1900,9 +1940,21 @@ async function runCheck() {
   statusLine.textContent = 'Wetterdaten werden geladen …';
   statusLine.className = 'status-line';
 
+  // Eingaben JETZT festhalten: Während die Daten laden, darf man weiter tippen,
+  // ohne dass die Auswertung mit halb geänderten Werten (oder ohne Ort) rechnet.
+  const mySeq = ++checkSeq;
+  const place = { ...selectedPlace };
+  checkCtx = {
+    place,
+    datum: datumInput.value, von: vonInput.value, bis: bisInput.value,
+    multiday: multidayCheckbox.checked, enddatum: enddatumInput.value,
+    continuous: continuousCheckbox.checked
+  };
+  const ctx = checkCtx;
+
   try {
     const MODEL_LIST = 'best_match,icon_d2,ecmwf_ifs04,gfs_seamless,geosphere_arome_austria,arome_france';
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${selectedPlace.lat}&longitude=${selectedPlace.lon}` +
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}` +
       `&hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,wind_speed_10m,wind_gusts_10m,weather_code` +
       `&current=temperature_2m,precipitation,cloud_cover,wind_gusts_10m,weather_code,is_day` +
       `&daily=sunrise,sunset` +
@@ -1912,22 +1964,25 @@ async function runCheck() {
     const data = await res.json();
 
     // C-LAEF AlpeAdria (1km) nur innerhalb Österreichs und für die nächsten ca. 60 Std. verfügbar
-    const targetStartMs = new Date(`${datumInput.value}T${vonInput.value}:00`).getTime();
+    // C-LAEF AlpeAdria (1km) nur innerhalb Österreichs und für die nächsten ca. 60 Std. verfügbar
+    const targetStartMs = new Date(`${ctx.datum}T${ctx.von}:00`).getTime();
     const hoursUntilStart = (targetStartMs - Date.now()) / 3600000;
     let claefMap = null;
-    if (isInAustria(selectedPlace.lat, selectedPlace.lon) && hoursUntilStart <= 60 && hoursUntilStart >= -24) {
-      claefMap = await fetchClaefHourlyMap(selectedPlace.lat, selectedPlace.lon);
+    if (isInAustria(place.lat, place.lon) && hoursUntilStart <= 60 && hoursUntilStart >= -24) {
+      claefMap = await fetchClaefHourlyMap(place.lat, place.lon);
     }
 
+    if (mySeq !== checkSeq) return; // inzwischen wurde neu geprüft
     renderResults(data, claefMap);
     statusLine.textContent = '';
 
     const radarLink = document.getElementById('radarLink');
-    radarLink.href = `https://www.windy.com/?radar,${selectedPlace.lat.toFixed(4)},${selectedPlace.lon.toFixed(4)},9`;
+    radarLink.href = `https://www.windy.com/?radar,${place.lat.toFixed(4)},${place.lon.toFixed(4)},9`;
     radarLink.style.display = 'inline-flex';
 
-    loadGeosphereLive(selectedPlace.lat, selectedPlace.lon);
+    loadGeosphereLive(place.lat, place.lon);
   } catch(e) {
+    if (mySeq !== checkSeq) return;
     statusLine.textContent = 'Wetterdaten konnten nicht geladen werden. Bitte später erneut versuchen.';
     statusLine.className='status-line err';
   } finally {
@@ -1941,7 +1996,7 @@ async function runCheck() {
 //  - mehrtägig (Standard): pro Tag ein Fenster von-bis, Nächte bleiben außen vor
 // Gleiche Logik wie event_windows() im Backend (check_rain.py).
 function buildWindows(startDate, endDate, von, bis, continuous) {
-  const nextDay = d => localISODate(new Date(new Date(d + 'T00:00:00').getTime() + 86400000));
+  const nextDay = d => addDaysISO(d, 1);
   const overnight = bis <= von;
   if (!endDate || endDate === startDate) {
     return [{ start: `${startDate}T${von}`, end: `${overnight ? nextDay(startDate) : startDate}T${bis}` }];
@@ -1961,9 +2016,10 @@ function rangeLabel(a, b) {
 }
 
 function renderResults(data, claefMap) {
-  const chosenDate = datumInput.value;
-  const vonH = vonInput.value;
-  const bisH = bisInput.value;
+  const ctx = checkCtx;
+  const chosenDate = ctx.datum;
+  const vonH = ctx.von;
+  const bisH = ctx.bis;
   const isToday = chosenDate === localISODate(new Date());
 
   const h = data.hourly;
@@ -1983,12 +2039,12 @@ function renderResults(data, claefMap) {
   // Event) oder - falls "bis" zeitlich vor "von" liegt - automatisch der nächste
   // Kalendertag. Der Vergleich läuft rein über die ISO-Zeitstrings (sortieren
   // chronologisch korrekt), das deckt Übernacht- wie Mehrtages-Fenster gleich ab.
-  const isMultiday = multidayCheckbox.checked && !!enddatumInput.value && enddatumInput.value !== chosenDate;
-  const continuous = isMultiday && continuousCheckbox.checked;
+  const isMultiday = ctx.multiday && !!ctx.enddatum && ctx.enddatum !== chosenDate;
+  const continuous = isMultiday && ctx.continuous;
   const perDay = isMultiday && !continuous;
-  const windows = buildWindows(chosenDate, isMultiday ? enddatumInput.value : null, vonH, bisH, continuous);
+  const windows = buildWindows(chosenDate, isMultiday ? ctx.enddatum : null, vonH, bisH, continuous);
   const endDate = windows[windows.length - 1].end.slice(0, 10);
-  const lastCalendarDay = isMultiday ? enddatumInput.value : endDate;
+  const lastCalendarDay = isMultiday ? ctx.enddatum : endDate;
   const spansMultipleDays = isMultiday || endDate !== chosenDate;
 
   // filter hourly entries within the window(s); winOf = Index des Fensters (Tag), damit
@@ -1998,7 +2054,8 @@ function renderResults(data, claefMap) {
   const winOf = {};
   for (let i=0;i<times.length;i++){
     const t = times[i]; // "YYYY-MM-DDTHH:MM"
-    const w = windows.findIndex(win => t >= win.start && t <= win.end);
+    // Startstunde auf volle Stunde abrunden, sonst hätte z. B. 14:10–14:50 keine Stundenwerte
+    const w = windows.findIndex(win => t >= win.start.slice(0, 14) + '00' && t <= win.end);
     if (w !== -1) { idxs.push(i); winOf[i] = w; }
   }
 
@@ -2007,7 +2064,7 @@ function renderResults(data, claefMap) {
     : (spansMultipleDays
       ? `${formatDate(chosenDate)}, ${vonH} Uhr – ${formatDate(endDate)}, ${bisH} Uhr`
       : `${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`);
-  document.getElementById('resultOrt').textContent = `${selectedPlace.name} — ${windowLabel}`;
+  document.getElementById('resultOrt').textContent = `${ctx.place.name} — ${windowLabel}`;
   const liveBadge = document.getElementById('liveBadge');
   liveBadge.style.display = isToday ? 'inline-block' : 'none';
   document.getElementById('updatedNote').textContent = 'Abgerufen: ' + new Date().toLocaleString('de-AT');
@@ -2101,12 +2158,7 @@ function renderResults(data, claefMap) {
   // Events wird jeder Tag im Fenster einzeln aufgeführt, nicht nur erster/letzter Tag.
   const sunsetDates = [];
   {
-    let d = new Date(chosenDate + 'T00:00:00');
-    const endD = new Date(lastCalendarDay + 'T00:00:00');
-    while (d.getTime() <= endD.getTime()) {
-      sunsetDates.push(localISODate(d));
-      d = new Date(d.getTime() + 86400000);
-    }
+    for (let d = chosenDate; d <= lastCalendarDay; d = addDaysISO(d, 1)) sunsetDates.push(d);
   }
   const sunsetParts = sunsetDates
     .map(ds => dailySunsetMap[ds] ? { date: ds, time: dailySunsetMap[ds] } : null)
@@ -2291,19 +2343,22 @@ function renderResults(data, claefMap) {
     const dv = analyses.map(an => {
       const v = computeVerdict(an.lo, an.hi, an.best, 'Tag');
       const ds = rows[an.lo].dateStr;
-      return { ...v, ds, label: new Date(ds + 'T12:00:00').toLocaleDateString('de-AT', { weekday:'long', day:'numeric', month:'long' }) };
+      return { ...v, ds, dayNo: rows[an.lo].win + 1, label: new Date(ds + 'T12:00:00').toLocaleDateString('de-AT', { weekday:'long', day:'numeric', month:'long' }) };
     });
     const short = { g: 'Outdoor', a: 'Outdoor mit Plan B', r: 'Indoor' };
     const kinds = new Set(dv.map(d => d.kind));
     const overallKind = kinds.size === 1 ? dv[0].kind : (kinds.has('g') || kinds.has('a') ? 'a' : 'r');
     const overallTitle = kinds.size === 1 ? dv[0].title : 'Empfehlung je Tag unterschiedlich';
     const overallText = kinds.size === 1
-      ? `An allen ${dv.length} Tagen gleich: ${dv[0].text}`
-      : dv.map((d, i) => `Tag ${i + 1}: ${short[d.kind]}`).join(' · ');
-    setVerdict(overallKind, overallTitle, overallText);
+      ? `Gilt für alle ${dv.length} Tage – Details je Tag unten.`
+      : dv.map(d => `Tag ${d.dayNo}: ${short[d.kind]}`).join(' · ');
+    const missing = windows.length - dv.length;
+    setVerdict(overallKind, overallTitle, overallText + (missing > 0
+      ? ` Für ${missing} ${missing === 1 ? 'Tag liegt' : 'Tage liegen'} noch keine bzw. keine Vorhersage mehr vor (Vorschau max. 16 Tage).`
+      : ''));
     dayVerdictsEl.innerHTML = dv.map((d, i) => `
       <div class="day-verdict ${d.kind === 'g' ? 'good' : d.kind === 'a' ? 'warn' : 'bad'}">
-        <div class="dv-head"><span class="dv-day">Tag ${i + 1} · ${d.label}</span><span class="dv-tag">${d.title}</span></div>
+        <div class="dv-head"><span class="dv-day">Tag ${d.dayNo} · ${d.label}</span><span class="dv-tag">${d.title}</span></div>
         <p>${d.text}</p>
       </div>`).join('');
     dayVerdictsEl.style.display = 'block';
@@ -2593,7 +2648,9 @@ function analyzeNowcastFront(cells, times) {
   return found[0] || null;
 }
 
+let liveSeq = 0;
 async function loadGeosphereLive(lat, lon) {
+  const mySeq = ++liveSeq;
   const livePanel = document.getElementById('livePanel');
   const liveGrid = document.getElementById('liveGrid');
   const liveSub = document.getElementById('liveSub');
@@ -2621,6 +2678,7 @@ async function loadGeosphereLive(lat, lon) {
       fetch(centerUrl).then(r => { if (!r.ok) throw new Error('GeoSphere-API-Fehler'); return r.json(); }),
       fetchNowcastCells(lat, lon).catch(() => null)
     ]);
+    if (mySeq !== liveSeq) return; // inzwischen anderer Ort geprüft
     const cf = centerRes.features && centerRes.features[0];
     if (!cf) throw new Error('Zentrum ohne Daten');
     const timestamps = centerRes.timestamps || [];
@@ -2696,6 +2754,7 @@ async function loadGeosphereLive(lat, lon) {
       warnBox.style.display = 'block';
     }
   } catch (e) {
+    if (mySeq !== liveSeq) return;
     liveSub.textContent = 'Live-Nowcast derzeit nicht abrufbar (GeoSphere-Dienst kurzzeitig nicht erreichbar). Oben gelten die Open-Meteo-Vorschauwerte.';
     liveGrid.innerHTML = '';
   }
