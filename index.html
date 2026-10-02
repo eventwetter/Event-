@@ -171,6 +171,7 @@
     cursor:pointer;
   }
   #enddatumWrap{flex:1;min-width:160px;}
+  .hint-small{margin:2px 0 0 24px;font-size:12px;color:var(--muted,#8a8070);line-height:1.4;}
 
   .mode-toggle{
     display:flex;
@@ -355,7 +356,8 @@
     gap:6px;
     padding:3px 0;
   }
-  .period-line .dot{margin-top:2px;}
+  .period-line .dot{margin-top:2px;flex:none;}
+  .period-line .pl-text{min-width:0;}
   .period-line strong{font-weight:600;margin-right:2px;}
   .period-line .reason{color:var(--muted);}
   .period-line.conf{
@@ -400,9 +402,64 @@
     border-bottom:1px solid var(--line);
     white-space:nowrap;
   }
-  table.hours tr.best td{background:rgba(110,122,87,.13);}
-  table.hours tr.risk td{background:rgba(156,90,70,.13);}
+  table.hours tr.best td{background:rgba(110,122,87,.26);}
+  table.hours tr.risk td{background:rgba(156,90,70,.30);}
+  table.hours tr.best td.t,table.hours tr.risk td.t{font-weight:700;}
+  table.hours tr.risk td{color:#4a2418;}
+  /* Tagesüberschrift bei mehrtägigen Events */
+  table.hours tr.day-head td{
+    background:var(--ink);color:#F5F0E6;font-size:11.5px;font-weight:600;
+    letter-spacing:.07em;text-transform:uppercase;padding:9px 8px;
+    white-space:normal;border-bottom:0;box-shadow:none;
+  }
+  table.hours tr.day-head .dh-sun{font-weight:400;opacity:.8;margin-left:8px;white-space:nowrap;}
+  #dayVerdicts{margin:-6px 0 16px;}
+  .day-verdict{background:#fff;border:1px solid var(--line);border-left:4px solid var(--line);border-radius:2px;padding:10px 14px;margin-bottom:8px;}
+  .day-verdict.good{border-left-color:var(--good);}
+  .day-verdict.warn{border-left-color:var(--warn);}
+  .day-verdict.bad{border-left-color:var(--risk);}
+  .day-verdict .dv-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;align-items:baseline;}
+  .day-verdict .dv-day{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+  .day-verdict .dv-tag{font-weight:600;font-size:14px;}
+  .day-verdict.good .dv-tag{color:var(--good);}
+  .day-verdict.warn .dv-tag{color:#9a6b1f;}
+  .day-verdict.bad .dv-tag{color:var(--risk);}
+  .day-verdict p{margin:4px 0 0;font-size:13px;}
+  .period-day{font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:10px 0 2px;padding-top:8px;border-top:1px solid var(--line);}
+  .period-day:first-child{margin-top:0;padding-top:0;border-top:0;}
+  .legend .sw{display:inline-block;width:14px;height:10px;margin-right:6px;border-radius:1px;}
+  .legend .sw.best{background:rgba(110,122,87,.45);}
+  .legend .sw.risk{background:rgba(156,90,70,.5);}
   .table-wrap{overflow-x:auto;}
+  /* Am Computer: Wetter-Symbol vor dem Text, Kurz-Spaltenköpfe ausgeblendet */
+  table.hours .wx-ico{margin-right:6px;}
+  table.hours .hs{display:none;}
+  table.hours .u{font-size:.8em;color:var(--muted,#8a8070);}
+  @media(max-width:389px){table.hours .u{display:none;}}
+  /* Handy: alle Werte ohne seitliches Scrollen. Das Wetter erscheint als Symbol
+     statt Text, die Spaltenköpfe sind kurz, der Ampelstatus ist ein farbiger
+     Streifen an der Uhrzeit (statt eigener Punktspalte). */
+  @media(max-width:560px){
+    table.hours{font-size:12.5px;}
+    table.hours th{font-size:10px;letter-spacing:.02em;padding:8px 2px;white-space:normal;line-height:1.15;vertical-align:bottom;}
+    table.hours td{padding:9px 2px;}
+    table.hours .c-dot,table.hours .wx-label,table.hours .hl{display:none;}
+    table.hours .hs{display:inline;}
+    table.hours .wx-ico{margin-right:0;font-size:15px;}
+    table.hours td.t{padding-left:8px;}
+    table.hours th:first-child{padding-left:8px;}
+    table.hours td.t.s-g{box-shadow:inset 3px 0 0 var(--good);}
+    table.hours td.t.s-a{box-shadow:inset 3px 0 0 var(--warn);}
+    table.hours td.t.s-r{box-shadow:inset 3px 0 0 var(--risk);}
+  }
+  /* sehr schmale Geräte: Bewölkung entfällt, damit der Rest nicht scrollt */
+  @media(max-width:340px){
+    table.hours .c-cloud{display:none;}
+    table.hours{font-size:12px;}
+    table.hours th,table.hours td{padding-left:1px;padding-right:1px;}
+    table.hours td.t,table.hours th:first-child{padding-left:7px;}
+    table.hours .wx-ico{font-size:14px;}
+  }
   .dot{
     display:inline-block;
     width:8px;height:8px;
@@ -657,6 +714,11 @@
 </head>
 <body>
 
+<!-- Wird nur angezeigt, wenn die Seite als test.html aufgerufen wird. Die Datei ist
+     sonst identisch mit index.html, so lässt sich Testversion und Live-Version
+     mit demselben Dateiinhalt veröffentlichen. -->
+<div id="testBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:3000;background:#9C5A46;color:#fff;text-align:center;font:600 11px 'Work Sans',sans-serif;letter-spacing:.1em;padding:4px 8px;text-transform:uppercase;">Testversion – gleiche Datenbank wie die Live-App</div>
+
 <div id="lockOverlay" class="lock-overlay">
   <div class="lock-box">
     <img src="Firmenlogo.png" alt="" class="lock-logo">
@@ -668,6 +730,7 @@
     <input type="password" id="lockCodeInput" autocomplete="current-password">
     <button type="button" class="submit-btn" id="lockSubmitBtn">Anmelden</button>
     <div class="status-line" id="lockStatus"></div>
+    <button type="button" class="text-btn" id="lockResetBtn" style="margin-top:14px;">Passwort vergessen?</button>
   </div>
 </div>
 
@@ -702,6 +765,7 @@
       </div>
       <div class="events-actions">
         <button type="button" class="submit-btn small" id="saveEventBtn">Event speichern</button>
+        <button type="button" class="text-btn" id="saveAsNewBtn" style="display:none;">Als neues Event speichern</button>
         <button type="button" class="text-btn" id="changePwBtn">Passwort ändern</button>
         <button type="button" class="text-btn" id="lockAgainBtn">Abmelden</button>
       </div>
@@ -761,6 +825,13 @@
         <input type="date" id="enddatum">
       </div>
     </div>
+    <div id="continuousWrap" style="display:none;margin-top:10px;">
+      <label class="checkbox-label" style="padding-bottom:4px;">
+        <input type="checkbox" id="continuous">
+        Durchgehend, auch nachts (Ausnahme)
+      </label>
+      <p class="hint-small" id="continuousHint"></p>
+    </div>
     <div class="field-row time-row" style="margin-top:18px;">
       <div>
         <label for="von">Zeitfenster von</label>
@@ -792,6 +863,8 @@
         </div>
       </div>
 
+      <div id="dayVerdicts" style="display:none;"></div>
+
       <div class="metric-grid" id="metricGrid"></div>
 
       <div class="period-box" id="periodBox"></div>
@@ -805,6 +878,8 @@
         <span><span class="dot g"></span>gut geeignet</span>
         <span><span class="dot a"></span>grenzwertig</span>
         <span><span class="dot r"></span>kritisch</span>
+        <span><span class="sw best"></span>bester Zeitraum</span>
+        <span><span class="sw risk"></span>kritischster Zeitraum</span>
       </div>
     </div>
 
@@ -826,6 +901,10 @@
 </div>
 
 <script>
+if (/\/test\.html$/i.test(location.pathname)) {
+  document.getElementById('testBanner').style.display = 'block';
+  document.body.style.paddingTop = '24px';
+}
 const ortInput = document.getElementById('ort');
 const suggBox = document.getElementById('suggestions');
 const datumInput = document.getElementById('datum');
@@ -834,6 +913,9 @@ const bisInput = document.getElementById('bis');
 const multidayCheckbox = document.getElementById('multiday');
 const enddatumWrap = document.getElementById('enddatumWrap');
 const enddatumInput = document.getElementById('enddatum');
+const continuousCheckbox = document.getElementById('continuous');
+const continuousWrap = document.getElementById('continuousWrap');
+const continuousHint = document.getElementById('continuousHint');
 const checkBtn = document.getElementById('checkBtn');
 const statusLine = document.getElementById('statusLine');
 const resultsEl = document.getElementById('results');
@@ -878,12 +960,23 @@ function showLock(message) {
   lockEmailInput.focus();
 }
 
-if (typeof firebase === 'undefined') {
-  // Kein Firebase verfügbar: App lieber ungeschützt aber nutzbar lassen,
-  // statt sie komplett zu blockieren. Team-Funktionen fallen dann weg.
+// Fallback ohne Firebase (SDK nicht ladbar: Netzwerk, Blocker, Firmen-Firewall):
+// Der Wetter-Check läuft trotzdem. Das ist unkritisch, weil er nur öffentliche
+// Wetterdaten nutzt - die gespeicherten Events und Push-Abos sind unabhängig
+// davon durch die Firestore-Regeln auf dem Server geschützt. Nur die
+// Team-Funktionen (Events speichern/laden, Push, Passwort ändern) fallen weg.
+function enableWithoutFirebase(reason) {
   unlockApp();
   const eventsPanelEl = document.getElementById('eventsPanel');
-  if (eventsPanelEl) eventsPanelEl.innerHTML = '<h2 class="panel-h2">Gespeicherte Events</h2><p class="auth-hint">Team-Funktionen momentan nicht verfügbar (Firebase konnte nicht geladen werden).</p>';
+  if (eventsPanelEl) {
+    eventsPanelEl.innerHTML = '<h2 class="panel-h2">Gespeicherte Events</h2>' +
+      '<p class="auth-hint">Team-Funktionen (Events speichern, Push, Anmeldung) sind gerade nicht verfügbar – ' +
+      reason + ' Der Wetter-Check unten funktioniert trotzdem. Zum Wiederherstellen die Seite neu laden.</p>';
+  }
+}
+
+if (typeof firebase === 'undefined') {
+  enableWithoutFirebase('die Verbindung zu Firebase konnte nicht aufgebaut werden.');
 } else {
 try {
   const firebaseConfig = {
@@ -903,6 +996,7 @@ try {
   const deleteEventBtn = document.getElementById('deleteEventBtn');
   const eventName = document.getElementById('eventName');
   const saveEventBtn = document.getElementById('saveEventBtn');
+  const saveAsNewBtn = document.getElementById('saveAsNewBtn');
   const eventsStatus = document.getElementById('eventsStatus');
   const lockAgainBtn = document.getElementById('lockAgainBtn');
 
@@ -949,14 +1043,27 @@ try {
       if (!newToken) return;
       const oldToken = localStorage.getItem('eventWetterFcmToken');
       if (oldToken && oldToken !== newToken) {
-        const snap = await db.collection('event_subscriptions').where('token', '==', oldToken).get();
-        if (!snap.empty) {
-          const batch = db.batch();
-          snap.forEach(doc => batch.update(doc.ref, { token: newToken }));
-          await batch.commit();
-        }
+        const FV = firebase.firestore.FieldValue;
+        const batch = db.batch();
+        let changes = 0;
+        // Aktuelle Struktur: mehrere Geräte pro Event im Array "tokens"
+        const snap = await db.collection('event_subscriptions').where('tokens', 'array-contains', oldToken).get();
+        snap.forEach(doc => {
+          const arr = (doc.data().tokens || []).filter(t => t !== oldToken);
+          if (!arr.includes(newToken)) arr.push(newToken);
+          batch.update(doc.ref, { tokens: arr });
+          changes++;
+        });
+        // Altbestand: einzelnes Feld "token" (vor der Umstellung auf mehrere Geräte)
+        const legacy = await db.collection('event_subscriptions').where('token', '==', oldToken).get();
+        legacy.forEach(doc => {
+          batch.update(doc.ref, { token: FV.delete(), tokens: FV.arrayUnion(newToken) });
+          changes++;
+        });
+        if (changes) await batch.commit();
       }
       localStorage.setItem('eventWetterFcmToken', newToken);
+      if (activeEventId) refreshPushButtonState(activeEventId);
     } catch (e) {
       // Kein Fehlerfall im engeren Sinn - z.B. wenn noch nie eine Berechtigung
       // erteilt wurde. Dann bleibt der alte Token (falls vorhanden) einfach stehen.
@@ -974,12 +1081,26 @@ try {
     pushToggleBtn.disabled = false;
     try {
       const snap = await db.collection('event_subscriptions').doc(id).get();
-      const subscribed = snap.exists && !!snap.data().token;
+      // "Aktiv" heißt: DIESES Gerät ist eingetragen - andere Team-Geräte haben
+      // ihr eigenes Abo im selben Event-Dokument.
+      const myToken = localStorage.getItem('eventWetterFcmToken');
+      const data = snap.exists ? snap.data() : {};
+      const subscribed = !!myToken && ((data.tokens || []).includes(myToken) || data.token === myToken);
       pushToggleBtn.textContent = subscribed ? '🔔 Push aktiv – deaktivieren' : 'Push aktivieren';
       pushToggleBtn.classList.toggle('active', subscribed);
     } catch (e) {
       pushToggleBtn.textContent = 'Push aktivieren';
     }
+  }
+
+  // iPhone/iPad: Web-Push gibt es dort nur, wenn die App über "Zum Home-
+  // Bildschirm" installiert wurde (ab iOS 16.4) - im normalen Safari-Tab nicht.
+  function isIosBrowserTab() {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    return ios && !standalone;
   }
 
   pushToggleBtn.addEventListener('click', async () => {
@@ -990,8 +1111,15 @@ try {
     if (isActive) {
       pushStatus.textContent = 'Deaktiviere …';
       try {
-        await db.collection('event_subscriptions').doc(activeEventId).set({ token: null }, { merge: true });
-        pushStatus.textContent = 'Push deaktiviert.';
+        // Nur DIESES Gerät austragen, die Abos der anderen bleiben bestehen.
+        const FV = firebase.firestore.FieldValue;
+        const myToken = localStorage.getItem('eventWetterFcmToken');
+        const ref = db.collection('event_subscriptions').doc(activeEventId);
+        const snap = await ref.get();
+        const upd = { tokens: FV.arrayRemove(myToken) };
+        if (snap.exists && snap.data().token === myToken) upd.token = FV.delete();
+        await ref.update(upd);
+        pushStatus.textContent = 'Push auf diesem Gerät deaktiviert.';
         refreshPushButtonState(activeEventId);
       } catch (e) {
         pushStatus.className = 'status-line err';
@@ -1002,7 +1130,9 @@ try {
 
     if (!messaging) {
       pushStatus.className = 'status-line err';
-      pushStatus.textContent = 'Push-Benachrichtigungen werden von diesem Browser nicht unterstützt.';
+      pushStatus.textContent = isIosBrowserTab()
+        ? 'Auf dem iPhone funktioniert Push nur, wenn die App über „Teilen → Zum Home-Bildschirm" installiert und von dort geöffnet wurde.'
+        : 'Push-Benachrichtigungen werden von diesem Browser nicht unterstützt.';
       return;
     }
     const ev = eventsCache[activeEventId];
@@ -1021,18 +1151,29 @@ try {
         return;
       }
       const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
-      await db.collection('event_subscriptions').doc(activeEventId).set({
+      if (!token) throw new Error('Kein Push-Token erhalten.');
+      const FV = firebase.firestore.FieldValue;
+      const ref = db.collection('event_subscriptions').doc(activeEventId);
+      // Mehrere Geräte pro Event: Token im Array ergänzen. Ein evtl. noch im alten
+      // Einzelfeld "token" stehendes Gerät wird dabei mit übernommen.
+      const existing = await ref.get();
+      const legacyToken = existing.exists ? existing.data().token : null;
+      const addTokens = [token];
+      if (legacyToken && legacyToken !== token) addTokens.push(legacyToken);
+      await ref.set({
         eventId: activeEventId,
         ortName: ev.ortName,
         lat: ev.lat,
         lon: ev.lon,
         datum: ev.datum,
         enddatum: ev.enddatum || null,
+        durchgehend: !!ev.durchgehend,
         von: ev.von,
         bis: ev.bis,
-        token: token,
+        tokens: FV.arrayUnion(...addTokens),
+        token: FV.delete(),
         finished: false,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        updatedAt: FV.serverTimestamp()
       }, { merge: true });
       localStorage.setItem('eventWetterFcmToken', token);
       pushStatus.textContent = 'Regen-Push aktiviert.';
@@ -1068,12 +1209,45 @@ try {
       await auth.signInWithEmailAndPassword(email, password);
       lockStatus.textContent = '';
     } catch (e) {
-      showLock('Anmeldung fehlgeschlagen: falsche Zugangsdaten oder kein Account hinterlegt.');
+      if (e && e.code === 'auth/network-request-failed') {
+        showLock('Keine Verbindung zum Anmelde-Dienst – bitte Internetverbindung prüfen und erneut versuchen.');
+      } else if (e && e.code === 'auth/too-many-requests') {
+        showLock('Zu viele Fehlversuche – bitte kurz warten und erneut versuchen.');
+      } else {
+        showLock('Anmeldung fehlgeschlagen: falsche Zugangsdaten oder kein Account hinterlegt.');
+      }
     }
     lockSubmitBtn.disabled = false;
   }
   lockSubmitBtn.addEventListener('click', submitLogin);
   lockCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
+
+  // Passwort vergessen: Firebase schickt einen Link zum Zurücksetzen an die
+  // E-Mail-Adresse. Bewusst immer dieselbe Rückmeldung, egal ob die Adresse
+  // ein Konto hat - verrät sonst, welche Adressen im Team existieren.
+  document.getElementById('lockResetBtn').addEventListener('click', async () => {
+    const email = lockEmailInput.value.trim();
+    if (!email) {
+      lockStatus.className = 'status-line err';
+      lockStatus.textContent = 'Bitte oben zuerst die E-Mail-Adresse eingeben.';
+      lockEmailInput.focus();
+      return;
+    }
+    lockStatus.className = 'status-line';
+    lockStatus.textContent = 'Sende Link …';
+    try {
+      auth.languageCode = 'de';
+      await auth.sendPasswordResetEmail(email);
+    } catch (e) {
+      if (e && e.code === 'auth/invalid-email') {
+        lockStatus.className = 'status-line err';
+        lockStatus.textContent = 'Das ist keine gültige E-Mail-Adresse.';
+        return;
+      }
+    }
+    lockStatus.className = 'status-line ok';
+    lockStatus.textContent = 'Falls ein Konto existiert, wurde ein Link zum Zurücksetzen gesendet (ggf. Spam-Ordner prüfen).';
+  });
   lockEmailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') lockCodeInput.focus(); });
 
   lockAgainBtn.addEventListener('click', () => auth.signOut());
@@ -1149,6 +1323,14 @@ try {
   pwNewInput2.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPasswordChange(); });
 
   let eventsCache = {}; // id -> Eventdaten, für Dropdown-Auswahl
+  let editingEventId = null; // gesetzt, wenn ein geladenes Event bearbeitet wird
+
+  function setEditing(id) {
+    editingEventId = id || null;
+    saveEventBtn.textContent = editingEventId ? 'Änderungen speichern' : 'Event speichern';
+    saveAsNewBtn.style.display = editingEventId ? '' : 'none';
+    if (!editingEventId) eventName.value = '';
+  }
 
 async function loadEvents() {
   eventSelect.innerHTML = '<option value="">Lädt …</option>';
@@ -1162,16 +1344,35 @@ async function loadEvents() {
     placeholder.value = '';
     placeholder.textContent = snap.empty ? 'Keine gespeicherten Events' : '– Event wählen –';
     eventSelect.appendChild(placeholder);
+    // Anstehende Events zuerst (nächstes oben), vergangene danach (jüngstes oben)
+    // in eigener Gruppe - so bleiben alte Events erreichbar, stören aber nicht.
+    const todayIso = localISODate(new Date());
+    const upcoming = [], past = [];
     snap.forEach(doc => {
       const ev = doc.data();
       eventsCache[doc.id] = ev;
+      const last = ev.enddatum || ev.datum || '';
+      (last && last < todayIso ? past : upcoming).push({ id: doc.id, ev });
+    });
+    upcoming.sort((a, b) => (a.ev.datum || '').localeCompare(b.ev.datum || ''));
+    past.sort((a, b) => (b.ev.datum || '').localeCompare(a.ev.datum || ''));
+    const addOption = (parent, { id, ev }) => {
       const opt = document.createElement('option');
-      opt.value = doc.id;
+      opt.value = id;
       const zeit = ev.von ? `, ${ev.von}–${ev.bis} Uhr` : '';
       const datumLabel = ev.enddatum && ev.enddatum !== ev.datum ? `${ev.datum} – ${ev.enddatum}` : (ev.datum || '');
       opt.textContent = `${ev.name || '(ohne Namen)'} — ${ev.ortName || ''} — ${datumLabel}${zeit}`;
-      eventSelect.appendChild(opt);
-    });
+      parent.appendChild(opt);
+    };
+    upcoming.forEach(x => addOption(eventSelect, x));
+    if (past.length) {
+      const grp = document.createElement('optgroup');
+      grp.label = 'Vergangene Events';
+      past.forEach(x => addOption(grp, x));
+      eventSelect.appendChild(grp);
+    }
+    if (editingEventId && !eventsCache[editingEventId]) setEditing(null);
+    else if (editingEventId) eventSelect.value = editingEventId;
   } catch (e) {
     eventSelect.innerHTML = '<option value="">Events konnten nicht geladen werden</option>';
   }
@@ -1197,6 +1398,8 @@ deleteEventBtn.addEventListener('click', () => {
 
 function loadEventIntoForm(ev, id) {
   refreshPushButtonState(id || null);
+  setEditing(id || null);
+  eventName.value = ev.name || '';
   selectedPlace = { name: ev.ortName, lat: ev.lat, lon: ev.lon };
   ortInput.value = ev.ortName || '';
   if (ev.datum) { datumInput.value = ev.datum; datumTouched = true; }
@@ -1208,12 +1411,15 @@ function loadEventIntoForm(ev, id) {
     enddatumInput.value = ev.enddatum;
     enddatumTouched = true;
     syncEnddatumBounds();
+    continuousCheckbox.checked = !!ev.durchgehend;
   } else {
     multidayCheckbox.checked = false;
     enddatumWrap.style.display = 'none';
     enddatumTouched = false;
     enddatumInput.value = datumInput.value;
+    continuousCheckbox.checked = false;
   }
+  updateContinuousUi();
   document.querySelector('.panel:not(#eventsPanel)').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1224,6 +1430,7 @@ async function deleteEvent(id, name) {
     await db.collection('events').doc(id).delete();
     try { await db.collection('event_subscriptions').doc(id).delete(); } catch (e) { /* egal, falls keine Subscription existierte */ }
     if (activeEventId === id) refreshPushButtonState(null);
+    if (editingEventId === id) setEditing(null);
     loadEvents();
   } catch (e) {
     eventsStatus.className = 'status-line err';
@@ -1231,7 +1438,7 @@ async function deleteEvent(id, name) {
   }
 }
 
-saveEventBtn.addEventListener('click', async () => {
+async function saveEvent(asNew) {
   eventsStatus.className = 'status-line';
   if (!selectedPlace) {
     eventsStatus.className = 'status-line err';
@@ -1244,33 +1451,63 @@ saveEventBtn.addEventListener('click', async () => {
     return;
   }
   eventsStatus.textContent = 'Speichert …';
+  const fields = {
+    name: eventName.value.trim(),
+    ortName: selectedPlace.name,
+    lat: selectedPlace.lat,
+    lon: selectedPlace.lon,
+    datum: datumInput.value,
+    enddatum: (multidayCheckbox.checked && enddatumInput.value) ? enddatumInput.value : null,
+    durchgehend: !!(multidayCheckbox.checked && enddatumInput.value && continuousCheckbox.checked),
+    von: vonInput.value,
+    bis: bisInput.value
+  };
   try {
-    const docRef = await db.collection('events').add({
-      name: eventName.value.trim(),
-      ortName: selectedPlace.name,
-      lat: selectedPlace.lat,
-      lon: selectedPlace.lon,
-      datum: datumInput.value,
-      enddatum: (multidayCheckbox.checked && enddatumInput.value) ? enddatumInput.value : null,
-      von: vonInput.value,
-      bis: bisInput.value,
-      createdBy: (auth.currentUser && auth.currentUser.email) || 'Team',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    eventName.value = '';
-    eventsStatus.textContent = 'Event gespeichert.';
+    let id;
+    if (editingEventId && !asNew) {
+      // Bestehendes Event aktualisieren (kein Duplikat). Ersteller/Anlegedatum bleiben.
+      id = editingEventId;
+      await db.collection('events').doc(id).update(fields);
+      // Hat das Event schon Push-Abos, deren Kopie der Eventdaten mit aktualisieren
+      // und wieder "nicht beendet" setzen (z. B. bei verschobenem Datum).
+      try {
+        const subRef = db.collection('event_subscriptions').doc(id);
+        const subSnap = await subRef.get();
+        if (subSnap.exists) {
+          await subRef.update({
+            ortName: fields.ortName, lat: fields.lat, lon: fields.lon,
+            datum: fields.datum, enddatum: fields.enddatum, durchgehend: fields.durchgehend, von: fields.von, bis: fields.bis,
+            finished: false,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      } catch (e) { /* Event ist gespeichert; Abo-Kopie wird beim nächsten Aktivieren erneuert */ }
+    } else {
+      const docRef = await db.collection('events').add({
+        ...fields,
+        createdBy: (auth.currentUser && auth.currentUser.email) || 'Team',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      id = docRef.id;
+    }
+    eventsStatus.textContent = (editingEventId && !asNew) ? 'Änderungen gespeichert.' : 'Event gespeichert.';
     await loadEvents();
-    refreshPushButtonState(docRef.id);
+    setEditing(id);
+    eventSelect.value = id;
+    loadEventBtn.disabled = false;
+    deleteEventBtn.disabled = false;
+    refreshPushButtonState(id);
   } catch (e) {
     eventsStatus.className = 'status-line err';
     eventsStatus.textContent = 'Speichern fehlgeschlagen.';
   }
-});
+}
+saveEventBtn.addEventListener('click', () => saveEvent(false));
+saveAsNewBtn.addEventListener('click', () => saveEvent(true));
 
 } catch (e) {
-  unlockApp();
-  const eventsPanelEl = document.getElementById('eventsPanel');
-  if (eventsPanelEl) eventsPanelEl.innerHTML = '<h2 class="panel-h2">Gespeicherte Events</h2><p class="auth-hint">Team-Funktionen momentan nicht verfügbar (Firebase-Initialisierung fehlgeschlagen).</p>';
+  console.error('Firebase-Initialisierung fehlgeschlagen:', e);
+  enableWithoutFirebase('Firebase konnte nicht gestartet werden.');
 }
 }
 
@@ -1326,6 +1563,13 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 
 datumInput.addEventListener('change', syncEnddatumBounds);
 
+function updateContinuousUi() {
+  continuousWrap.style.display = multidayCheckbox.checked ? 'block' : 'none';
+  if (!multidayCheckbox.checked) continuousCheckbox.checked = false;
+  continuousHint.textContent = continuousCheckbox.checked
+    ? 'Ein einziges Fenster vom ersten Tag „von" bis zum letzten Tag „bis" – inklusive Nächte. Regen-Pushes können dann auch nachts kommen.'
+    : 'Standard: Das Zeitfenster gilt an jedem Tag einzeln (z. B. täglich 10:00–23:00). Nachts keine Auswertung und keine Pushes.';
+}
 multidayCheckbox.addEventListener('change', () => {
   if (multidayCheckbox.checked) {
     enddatumWrap.style.display = 'block';
@@ -1333,7 +1577,10 @@ multidayCheckbox.addEventListener('change', () => {
   } else {
     enddatumWrap.style.display = 'none';
   }
+  updateContinuousUi();
 });
+continuousCheckbox.addEventListener('change', updateContinuousUi);
+updateContinuousUi();
 
 // default Zeitfenster: aktuelle Uhrzeit bis +6 Std. (nur solange nichts geändert wurde).
 // Reicht das über Mitternacht hinaus, läuft "bis" einfach in den nächsten Tag weiter -
@@ -1347,7 +1594,7 @@ ortInput.addEventListener('input', () => {
   selectedPlace = null;
   clearTimeout(suggestTimer);
   const q = ortInput.value.trim();
-  if (q.length < 2) { suggBox.style.display='none'; return; }
+  if (q.length < 2) { searchSeq++; suggBox.style.display='none'; return; }
   suggestTimer = setTimeout(() => searchPlace(q), 350);
 });
 
@@ -1482,31 +1729,40 @@ locateBtn.addEventListener('click', () => {
   );
 });
 
+let searchSeq = 0;
 async function searchPlace(q) {
+  // Laufnummer: langsame Antworten auf eine ältere Eingabe dürfen die
+  // Vorschläge zur neueren nicht mehr überschreiben.
+  const seq = ++searchSeq;
   try {
-    // Parallel: Open-Meteo für Ortsnamen (schnell, saubere Stadt/Region-Labels)
-    // und Nominatim für vollständige Adressen (Straße, Hausnummer, PLZ) -
-    // so erscheinen auch beim Tippen einer Adresse schon Live-Vorschläge.
-    const [omRes, nomRes] = await Promise.allSettled([
-      fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=de&format=json`).then(r => r.json()),
-      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1&accept-language=de`).then(r => r.json())
-    ]);
-
     const suggestions = [];
-    if (omRes.status === 'fulfilled' && omRes.value.results) {
-      omRes.value.results.forEach(r => {
+    // Open-Meteo für Ortsnamen (schnell, saubere Stadt/Region-Labels)
+    try {
+      const om = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=de&format=json`).then(r => r.json());
+      (om.results || []).forEach(r => {
         suggestions.push({
           label: [r.name, r.admin1, r.country].filter(Boolean).join(', '),
           lat: r.latitude, lon: r.longitude
         });
       });
-    }
-    if (nomRes.status === 'fulfilled' && Array.isArray(nomRes.value)) {
-      nomRes.value.forEach(r => {
-        suggestions.push({ label: r.display_name, lat: parseFloat(r.lat), lon: parseFloat(r.lon) });
-      });
+    } catch (e) {}
+
+    // Nominatim (vollständige Adressen) nur bei adressartiger Eingabe (enthält
+    // eine Zahl, z. B. Hausnummer/PLZ) oder wenn Open-Meteo nichts kennt, und
+    // erst nach einer kurzen Tipp-Pause: die Nominatim-Nutzungsregeln verbieten
+    // Abfragen bei jedem Tastendruck, bei Verstößen droht eine IP-Sperre.
+    if (/\d/.test(q) || !suggestions.length) {
+      await new Promise(r => setTimeout(r, 600));
+      if (seq !== searchSeq) return;
+      try {
+        const nom = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1&accept-language=de`).then(r => r.json());
+        if (Array.isArray(nom)) {
+          nom.forEach(r => suggestions.push({ label: r.display_name, lat: parseFloat(r.lat), lon: parseFloat(r.lon) }));
+        }
+      } catch (e) {}
     }
 
+    if (seq !== searchSeq) return;
     if (!suggestions.length) { suggBox.style.display='none'; return; }
 
     suggBox.innerHTML = '';
@@ -1528,14 +1784,20 @@ async function searchPlace(q) {
 
 // Eigener Bestätigungsdialog im App-Design statt des nativen Browser-confirm()
 // (der zeigt die Domain statt des Firmenlogos und lässt sich nicht stylen).
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function customConfirm(message, confirmLabel) {
   return new Promise(resolve => {
     const overlay = document.createElement('div');
     overlay.className = 'confirm-overlay';
+    // message enthält den Event-Namen (Freitext) -> escapen, damit z. B. "<" im
+    // Namen nicht als HTML interpretiert wird.
     overlay.innerHTML = `
       <div class="confirm-box">
         <img src="Firmenlogo.png" alt="" class="confirm-logo">
-        <p class="confirm-message">${message}</p>
+        <p class="confirm-message">${escapeHtml(message)}</p>
         <div class="confirm-actions">
           <button type="button" class="confirm-cancel">Abbrechen</button>
           <button type="button" class="confirm-ok">${confirmLabel || 'Löschen'}</button>
@@ -1550,6 +1812,21 @@ function customConfirm(message, confirmLabel) {
     overlay.querySelector('.confirm-ok').addEventListener('click', () => close(true));
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
   });
+}
+
+function weatherIcon(code) {
+  if (code === 0) return '☀️';
+  if (code === 1) return '🌤️';
+  if (code === 2) return '⛅';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫️';
+  if (code >= 51 && code <= 57) return '🌦️';
+  if (code >= 61 && code <= 67) return '🌧️';
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return '🌨️';
+  if (code === 80) return '🌦️';
+  if (code === 81 || code === 82) return '🌧️';
+  if (code >= 95) return '⛈️';
+  return '❔';
 }
 
 function weatherCodeInfo(code) {
@@ -1658,6 +1935,31 @@ async function runCheck() {
   }
 }
 
+// Überwachungs-/Auswertungsfenster als [{start,end}] mit lokalen ISO-Strings.
+//  - eintägig: von-bis (liegt "bis" vor/gleich "von", läuft es in den Folgetag)
+//  - mehrtägig + continuous: EIN Fenster vom ersten Tag "von" bis zum letzten Tag "bis"
+//  - mehrtägig (Standard): pro Tag ein Fenster von-bis, Nächte bleiben außen vor
+// Gleiche Logik wie event_windows() im Backend (check_rain.py).
+function buildWindows(startDate, endDate, von, bis, continuous) {
+  const nextDay = d => localISODate(new Date(new Date(d + 'T00:00:00').getTime() + 86400000));
+  const overnight = bis <= von;
+  if (!endDate || endDate === startDate) {
+    return [{ start: `${startDate}T${von}`, end: `${overnight ? nextDay(startDate) : startDate}T${bis}` }];
+  }
+  if (continuous) return [{ start: `${startDate}T${von}`, end: `${endDate}T${bis}` }];
+  const wins = [];
+  for (let d = startDate; d <= endDate; d = nextDay(d)) {
+    wins.push({ start: `${d}T${von}`, end: `${overnight ? nextDay(d) : d}T${bis}` });
+  }
+  return wins;
+}
+
+// "03.10. 10:00" + "03.10. 22:00" -> "03.10. 10:00–22:00" (Datum nur einmal, wenn gleicher Tag)
+function rangeLabel(a, b) {
+  if (a.time.length > 5 && a.time.slice(0, 6) === b.time.slice(0, 6)) return `${a.time}–${b.time.slice(7)}`;
+  return `${a.time}–${b.time}`;
+}
+
 function renderResults(data, claefMap) {
   const chosenDate = datumInput.value;
   const vonH = vonInput.value;
@@ -1681,27 +1983,30 @@ function renderResults(data, claefMap) {
   // Event) oder - falls "bis" zeitlich vor "von" liegt - automatisch der nächste
   // Kalendertag. Der Vergleich läuft rein über die ISO-Zeitstrings (sortieren
   // chronologisch korrekt), das deckt Übernacht- wie Mehrtages-Fenster gleich ab.
-  const isMultiday = multidayCheckbox.checked && !!enddatumInput.value;
-  const endDate = isMultiday
-    ? enddatumInput.value
-    : (bisH < vonH
-        ? localISODate(new Date(new Date(chosenDate + 'T00:00:00').getTime() + 86400000))
-        : chosenDate);
-  const spansMultipleDays = endDate !== chosenDate;
-  const startStr = `${chosenDate}T${vonH}`;
-  const endStr = `${endDate}T${bisH}`;
+  const isMultiday = multidayCheckbox.checked && !!enddatumInput.value && enddatumInput.value !== chosenDate;
+  const continuous = isMultiday && continuousCheckbox.checked;
+  const perDay = isMultiday && !continuous;
+  const windows = buildWindows(chosenDate, isMultiday ? enddatumInput.value : null, vonH, bisH, continuous);
+  const endDate = windows[windows.length - 1].end.slice(0, 10);
+  const lastCalendarDay = isMultiday ? enddatumInput.value : endDate;
+  const spansMultipleDays = isMultiday || endDate !== chosenDate;
 
-  // filter hourly entries within chosen date + window
+  // filter hourly entries within the window(s); winOf = Index des Fensters (Tag), damit
+  // "zusammenhängende" Phasen nie über eine Nacht zwischen zwei Tagen hinweg gebildet werden
   const times = h.time;
   const idxs = [];
+  const winOf = {};
   for (let i=0;i<times.length;i++){
     const t = times[i]; // "YYYY-MM-DDTHH:MM"
-    if (t >= startStr && t <= endStr) idxs.push(i);
+    const w = windows.findIndex(win => t >= win.start && t <= win.end);
+    if (w !== -1) { idxs.push(i); winOf[i] = w; }
   }
 
-  const windowLabel = spansMultipleDays
-    ? `${formatDate(chosenDate)}, ${vonH} Uhr – ${formatDate(endDate)}, ${bisH} Uhr`
-    : `${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`;
+  const windowLabel = perDay
+    ? `${formatDate(chosenDate)} – ${formatDate(lastCalendarDay)}, täglich ${vonH}–${bisH} Uhr`
+    : (spansMultipleDays
+      ? `${formatDate(chosenDate)}, ${vonH} Uhr – ${formatDate(endDate)}, ${bisH} Uhr`
+      : `${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`);
   document.getElementById('resultOrt').textContent = `${selectedPlace.name} — ${windowLabel}`;
   const liveBadge = document.getElementById('liveBadge');
   liveBadge.style.display = isToday ? 'inline-block' : 'none';
@@ -1714,6 +2019,7 @@ function renderResults(data, claefMap) {
     document.getElementById('metricGrid').innerHTML = '';
     document.getElementById('hoursTable').innerHTML = '';
     periodBox.innerHTML = '';
+    document.getElementById('dayVerdicts').style.display = 'none';
     methodBox.style.display = 'none';
     setVerdict('a','Keine Daten für dieses Fenster','Für den gewählten Zeitraum liegen keine Stundenwerte vor. Bitte Datum oder Zeitfenster prüfen (Vorschau reicht 16 Tage voraus).');
     resultsEl.style.display = 'block';
@@ -1775,7 +2081,7 @@ function renderResults(data, claefMap) {
     const timeLabel = spansMultipleDays
       ? `${dateStr.slice(8,10)}.${dateStr.slice(5,7)}. ${h.time[i].slice(11,16)}`
       : h.time[i].slice(11,16);
-    return { time: timeLabel, temp, cloud, prob, mm, gust, code, status, riskScore, claefFlag };
+    return { time: timeLabel, dateStr, temp, cloud, prob, mm, gust, code, status, riskScore, claefFlag, win: winOf[i] };
   });
   avgCloud = Math.round(avgCloud / rows.length);
 
@@ -1796,7 +2102,7 @@ function renderResults(data, claefMap) {
   const sunsetDates = [];
   {
     let d = new Date(chosenDate + 'T00:00:00');
-    const endD = new Date(endDate + 'T00:00:00');
+    const endD = new Date(lastCalendarDay + 'T00:00:00');
     while (d.getTime() <= endD.getTime()) {
       sunsetDates.push(localISODate(d));
       d = new Date(d.getTime() + 86400000);
@@ -1813,30 +2119,35 @@ function renderResults(data, claefMap) {
   }
   addMetric(metricGrid, 'Sonnenuntergang', sunsetLabel, anyAfterSunset);
 
-  // bester zusammenhängender Zeitraum (status 'g')
-  let bestStart = -1, bestLen = 0, curStart=-1, curLen=0;
-  rows.forEach((r,i) => {
-    if (r.status==='g') { if(curStart===-1) curStart=i; curLen++; }
-    else { if (curLen>bestLen){bestLen=curLen;bestStart=curStart;} curStart=-1; curLen=0; }
+  // Bester / kritischster Zeitraum je Fenster (bei mehrtägigen Events also je Tag).
+  // Phasen werden nie über eine Nacht zwischen zwei Fenstern gebildet.
+  function longestRun(lo, hi, pred) {
+    let s = -1, l = 0, cs = -1, cl = 0;
+    for (let i = lo; i < hi; i++) {
+      if (pred(rows[i])) { if (cs === -1) cs = i; cl++; }
+      else { if (cl > l) { l = cl; s = cs; } cs = -1; cl = 0; }
+    }
+    if (cl > l) { l = cl; s = cs; }
+    return { start: s, len: l };
+  }
+  const winRanges = [];
+  rows.forEach((r, i) => {
+    if (!winRanges.length || rows[i-1].win !== r.win) winRanges.push({ lo: i, hi: i + 1 });
+    else winRanges[winRanges.length - 1].hi = i + 1;
   });
-  if (curLen>bestLen){bestLen=curLen;bestStart=curStart;}
-
-  // kritischster Zeitraum: längster zusammenhängender 'r'-Block, sonst 'a'-Block, sonst einzelne Risiko-Spitze
-  function longestRun(statuses) {
-    let s=-1, l=0, cs=-1, cl=0;
-    rows.forEach((r,i) => {
-      if (statuses.includes(r.status)) { if(cs===-1) cs=i; cl++; }
-      else { if (cl>l){l=cl;s=cs;} cs=-1; cl=0; }
-    });
-    if (cl>l){l=cl;s=cs;}
-    return { start:s, len:l };
-  }
-  let worst = longestRun(['r']);
-  if (worst.len === 0) worst = longestRun(['a']);
-  let worstPeakIdx = -1;
-  if (worst.len === 0) {
-    rows.forEach((r,i) => { if (worstPeakIdx===-1 || r.riskScore > rows[worstPeakIdx].riskScore) worstPeakIdx = i; });
-  }
+  const analyses = winRanges.map(({ lo, hi }) => {
+    const best = longestRun(lo, hi, r => r.status === 'g');
+    let worst = longestRun(lo, hi, r => r.status === 'r');
+    if (worst.len === 0) worst = longestRun(lo, hi, r => r.status === 'a');
+    let peak = -1;
+    if (worst.len === 0) {
+      for (let i = lo; i < hi; i++) if (peak === -1 || rows[i].riskScore > rows[peak].riskScore) peak = i;
+    }
+    return { lo, hi, best, worst, peak };
+  });
+  // Gesamt-Bester (für die Gesamtbewertung): längste gute Phase über alle Tage
+  let bestStart = -1, bestLen = 0;
+  analyses.forEach(an => { if (an.best.len > bestLen) { bestLen = an.best.len; bestStart = an.best.start; } });
 
   // Warum ist genau das der kritischste Zeitraum? Ausschlaggebende Faktoren zusammenfassen.
   function reasonForRange(startIdx, len) {
@@ -1859,41 +2170,66 @@ function renderResults(data, claefMap) {
 
   // table
   const table = document.getElementById('hoursTable');
-  let html = '<tr><th>Uhrzeit</th><th></th><th>Wetter</th><th>Temp.</th><th>Wolken</th><th>Regen%</th><th>mm</th><th>Böen</th></tr>';
+  let html = '<tr><th><span class="hl">Uhrzeit</span><span class="hs">Zeit</span></th><th class="c-dot"></th><th>Wetter</th><th>Temp.</th>' +
+    '<th class="c-cloud"><span class="hl">Wolken</span><span class="hs">☁️</span></th>' +
+    '<th>Regen %</th><th>mm</th><th>Böen</th></tr>';
+  const analysisOf = i => analyses.find(an => i >= an.lo && i < an.hi);
+  let prevDate = null;
   rows.forEach((r,i) => {
     const [label] = weatherCodeInfo(r.code);
     const dotClass = r.status;
-    const inBest = bestStart!==-1 && i>=bestStart && i<bestStart+bestLen;
-    const inWorst = worst.start!==-1 && i>=worst.start && i<worst.start+worst.len;
-    const rowClass = inBest ? 'best' : (inWorst || i===worstPeakIdx ? 'risk' : '');
+    const an = analysisOf(i);
+    const inBest = an.best.start!==-1 && i>=an.best.start && i<an.best.start+an.best.len;
+    const inWorst = an.worst.start!==-1 && i>=an.worst.start && i<an.worst.start+an.worst.len;
+    const rowClass = inBest ? 'best' : (inWorst || i===an.peak ? 'risk' : '');
+    if (spansMultipleDays && r.dateStr !== prevDate) {
+      const dayName = new Date(r.dateStr + 'T12:00:00').toLocaleDateString('de-AT', { weekday:'long', day:'numeric', month:'long' });
+      const sun = dailySunsetMap[r.dateStr];
+      html += `<tr class="day-head"><td colspan="8">${dayName}${perDay ? ` · ${vonH}–${bisH} Uhr` : ''}${sun ? `<span class="dh-sun">☀ Sonnenuntergang ${sun}</span>` : ''}</td></tr>`;
+    }
+    prevDate = r.dateStr;
     html += `<tr class="${rowClass}">
-      <td>${r.time}</td>
-      <td><span class="dot ${dotClass}"></span></td>
-      <td>${label}</td>
+      <td class="t s-${dotClass}">${r.time.slice(-5)}</td>
+      <td class="c-dot"><span class="dot ${dotClass}"></span></td>
+      <td class="wx" title="${label}"><span class="wx-ico">${weatherIcon(r.code)}</span><span class="wx-label">${label}</span></td>
       <td>${Math.round(r.temp)}°C</td>
-      <td>${r.cloud}%</td>
+      <td class="c-cloud">${r.cloud}%</td>
       <td>${r.prob != null ? r.prob + '%' : '–'}</td>
       <td>${r.mm.toFixed(1)}${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
-      <td>${Math.round(r.gust)} km/h${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
+      <td>${Math.round(r.gust)}<span class="u"> km/h</span>${r.claefFlag ? '<sup class="claef-mark" title="Verfeinert durch GeoSphere C-LAEF AlpeAdria (1km)">¹</sup>' : ''}</td>
     </tr>`;
   });
   table.innerHTML = html;
 
-  // Bester / kritischster Zeitraum als eigene Zeilen
+  // Bester / kritischster Zeitraum als eigene Zeilen - bei mehrtägigen Events (Tagesfenster) je Tag
+  const periodLines = (an, withDate) => {
+    const lab = (x, y) => withDate ? rangeLabel(rows[x], rows[y]) : `${rows[x].time.slice(-5)}–${rows[y].time.slice(-5)}`;
+    let out = '';
+    if (an.best.len > 0) {
+      out += `<div class="period-line good"><span class="dot g"></span><span class="pl-text"><strong>Bester Zeitraum:</strong> ${lab(an.best.start, an.best.start+an.best.len-1)} Uhr</span></div>`;
+    } else {
+      out += `<div class="period-line good"><span class="dot g"></span><span class="pl-text"><strong>Bester Zeitraum:</strong> keine durchgehend unkritische Phase erkennbar</span></div>`;
+    }
+    if (an.worst.len > 0) {
+      const reason = reasonForRange(an.worst.start, an.worst.len);
+      out += `<div class="period-line bad"><span class="dot r"></span><span class="pl-text"><strong>Kritischster Zeitraum:</strong> ${lab(an.worst.start, an.worst.start+an.worst.len-1)} Uhr <span class="reason">(${reason})</span></span></div>`;
+    } else if (an.peak !== -1 && rows[an.peak].riskScore > 5 && rows[an.peak].status !== 'g') {
+      const reason = reasonForRange(an.peak, 1);
+      out += `<div class="period-line bad"><span class="dot a"></span><span class="pl-text"><strong>Kritischster Zeitpunkt:</strong> ${withDate ? rows[an.peak].time : rows[an.peak].time.slice(-5)} Uhr <span class="reason">(${reason}, im Vergleich die ungünstigste Stunde)</span></span></div>`;
+    } else {
+      out += `<div class="period-line bad"><span class="dot g"></span><span class="pl-text"><strong>Kritischster Zeitraum:</strong> keiner – komplett im unkritischen Bereich</span></div>`;
+    }
+    return out;
+  };
   let periodHtml = '';
-  if (bestLen > 0) {
-    periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr</div>`;
+  if (perDay) {
+    analyses.forEach(an => {
+      const ds = rows[an.lo].dateStr;
+      const dn = new Date(ds + 'T12:00:00').toLocaleDateString('de-AT', { weekday:'long', day:'numeric', month:'long' });
+      periodHtml += `<div class="period-day">${dn}</div>` + periodLines(an, false);
+    });
   } else {
-    periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> im Fenster keine durchgehend unkritische Phase erkennbar</div>`;
-  }
-  if (worst.len > 0) {
-    const reason = reasonForRange(worst.start, worst.len);
-    periodHtml += `<div class="period-line bad"><span class="dot r"></span><strong>Kritischster Zeitraum:</strong> ${rows[worst.start].time}–${rows[worst.start+worst.len-1].time} Uhr <span class="reason">(${reason})</span></div>`;
-  } else if (worstPeakIdx !== -1 && rows[worstPeakIdx].riskScore > 5) {
-    const reason = reasonForRange(worstPeakIdx, 1);
-    periodHtml += `<div class="period-line bad"><span class="dot a"></span><strong>Kritischster Zeitpunkt:</strong> ${rows[worstPeakIdx].time} Uhr <span class="reason">(${reason}, im Vergleich die ungünstigste Stunde im Fenster)</span></div>`;
-  } else {
-    periodHtml += `<div class="period-line bad"><span class="dot g"></span><strong>Kritischster Zeitraum:</strong> keiner – das ganze Fenster liegt im unkritischen Bereich</div>`;
+    periodHtml = periodLines(analyses[0], spansMultipleDays);
   }
   periodBox.innerHTML = periodHtml;
 
@@ -1908,27 +2244,74 @@ function renderResults(data, claefMap) {
   // verdict
   // Hinweistexte je nach tatsächlicher Ursache (Regen vs. Wind) formulieren, statt
   // pauschal "Regenschirm", auch wenn z. B. nur starke Böen ohne Niederschlag vorliegen.
-  const rainRisk = maxPrecipProb >= 30 || sumPrecip > 0 || worstCode === 3 || worstCode >= 95;
-  const windRisk = maxGust >= 35;
-  function riskAdvice() {
-    if (rainRisk && windRisk) return 'Regenschirme bzw. Unterstand griffbereit halten und Deko/Aufbauten gegen den Wind sichern.';
-    if (rainRisk) return 'Regenschirme oder ein Zelt bereithalten.';
-    if (windRisk) return `Kein Regen erwartet, aber Windböen bis ${Math.round(maxGust)} km/h – Deko, Kerzen und Aufbauten gut sichern.`;
-    return 'Ein Unterstand sollte trotzdem in der Nähe sein.';
+  // Ab 0,2 mm (wie in der Stunden-Ampel) - vorher reichten schon Spuren wie 0,02 mm,
+  // die in der Übersicht als "0.0 mm" erscheinen, für einen Regenschirm-Hinweis.
+  // Bewertung für einen Zeilenbereich (ganzes Fenster oder einzelner Tag) berechnen.
+  function computeVerdict(lo, hi, best, scope) {
+    let mProb = 0, sMm = 0, mGust = 0, wCode = 0;
+    for (let i = lo; i < hi; i++) {
+      const r = rows[i];
+      mProb = Math.max(mProb, r.prob ?? 0);
+      sMm += r.mm;
+      mGust = Math.max(mGust, r.gust);
+      if (r.code >= 95) wCode = Math.max(wCode, r.code);
+    }
+    const rainRisk = mProb >= 30 || sMm >= 0.2 || wCode >= 95;
+    const windRisk = mGust >= 35;
+    const hasBest = best.len > 0;
+    const bestTxt = hasBest
+      ? (perDay ? `${rows[best.start].time.slice(-5)}–${rows[best.start+best.len-1].time.slice(-5)}`
+                : rangeLabel(rows[best.start], rows[best.start+best.len-1]))
+      : '';
+    const riskAdvice = () => {
+      if (rainRisk && windRisk) return 'Regenschirme bzw. Unterstand griffbereit halten und Deko/Aufbauten gegen den Wind sichern.';
+      if (rainRisk) return 'Regenschirme oder ein Zelt bereithalten.';
+      if (windRisk) return `Kein Regen erwartet, aber Windböen bis ${Math.round(mGust)} km/h – Deko, Kerzen und Aufbauten gut sichern.`;
+      return 'Ein Unterstand sollte trotzdem in der Nähe sein.';
+    };
+    const ursache = windRisk && !rainRisk ? 'starker Wind' : 'Regen, Gewitter oder starker Wind';
+    const ursacheDat = windRisk && !rainRisk ? 'starkem Wind' : 'Regen, Gewitter oder starkem Wind';
+    if (wCode >= 95 || mProb >= 60 || sMm >= 2 || mGust >= 55) {
+      return { kind: 'r', title: 'Indoor empfohlen', text: hasBest
+        ? `${scope === 'Tag' ? 'An diesem Tag' : 'Im gewählten Fenster'} überwiegt das Risiko (${ursache}). Am ehesten geeignet wäre ${bestTxt} Uhr, aber auch dort keine Sicherheit.`
+        : `${scope === 'Tag' ? 'An diesem Tag' : 'Über das gesamte Zeitfenster'} ist mit ${ursacheDat} zu rechnen. Für den Outdoor-Teil aktuell keine sichere Phase erkennbar.` };
+    }
+    if (rainRisk || windRisk) {
+      return { kind: 'a', title: 'Outdoor möglich, mit Plan B in Reichweite', text: hasBest
+        ? `Die beste Phase liegt bei ${bestTxt} Uhr. Für den Rest ${scope === 'Tag' ? 'des Tages' : 'des Fensters'}: ${riskAdvice()}`
+        : `Leichtes Risiko ${scope === 'Tag' ? 'über den ganzen Tag' : 'über das ganze Fenster'} – Outdoor ist möglich. ${riskAdvice()}` };
+    }
+    return { kind: 'g', title: 'Outdoor gut geeignet',
+      text: `Für ${perDay ? 'täglich ' : ''}${vonH}–${bisH} Uhr sind kaum Störungen zu erwarten – Bewölkung, Regen und Wind liegen im unkritischen Bereich.` };
   }
-  if (worstCode >= 95 || maxPrecipProb >= 60 || sumPrecip >= 2 || maxGust >= 55) {
-    setVerdict('r','Indoor empfohlen',
-      bestLen>0
-        ? `Im gewählten Fenster überwiegt das Risiko (${windRisk && !rainRisk ? 'starker Wind' : 'Regen, Gewitter oder starker Wind'}). Am ehesten geeignet wäre ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr, aber auch dort keine Sicherheit.`
-        : `Über das gesamte Zeitfenster ist mit ${windRisk && !rainRisk ? 'starkem Wind' : 'Regen, Gewitter oder starkem Wind'} zu rechnen. Für den Outdoor-Teil aktuell keine sichere Phase erkennbar.`);
-  } else if (rainRisk || windRisk) {
-    setVerdict('a','Outdoor möglich, mit Plan B in Reichweite',
-      bestLen>0
-        ? `Die beste Phase liegt bei ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr. Für den Rest des Fensters: ${riskAdvice()}`
-        : `Leichtes Risiko über das ganze Fenster – Outdoor ist möglich. ${riskAdvice()}`);
+
+  const dayVerdictsEl = document.getElementById('dayVerdicts');
+  if (perDay) {
+    // Mehrtägig mit Tagesfenstern: je Tag eine eigene Empfehlung
+    const dv = analyses.map(an => {
+      const v = computeVerdict(an.lo, an.hi, an.best, 'Tag');
+      const ds = rows[an.lo].dateStr;
+      return { ...v, ds, label: new Date(ds + 'T12:00:00').toLocaleDateString('de-AT', { weekday:'long', day:'numeric', month:'long' }) };
+    });
+    const short = { g: 'Outdoor', a: 'Outdoor mit Plan B', r: 'Indoor' };
+    const kinds = new Set(dv.map(d => d.kind));
+    const overallKind = kinds.size === 1 ? dv[0].kind : (kinds.has('g') || kinds.has('a') ? 'a' : 'r');
+    const overallTitle = kinds.size === 1 ? dv[0].title : 'Empfehlung je Tag unterschiedlich';
+    const overallText = kinds.size === 1
+      ? `An allen ${dv.length} Tagen gleich: ${dv[0].text}`
+      : dv.map((d, i) => `Tag ${i + 1}: ${short[d.kind]}`).join(' · ');
+    setVerdict(overallKind, overallTitle, overallText);
+    dayVerdictsEl.innerHTML = dv.map((d, i) => `
+      <div class="day-verdict ${d.kind === 'g' ? 'good' : d.kind === 'a' ? 'warn' : 'bad'}">
+        <div class="dv-head"><span class="dv-day">Tag ${i + 1} · ${d.label}</span><span class="dv-tag">${d.title}</span></div>
+        <p>${d.text}</p>
+      </div>`).join('');
+    dayVerdictsEl.style.display = 'block';
   } else {
-    setVerdict('g','Outdoor gut geeignet',
-      `Für ${vonH}–${bisH} Uhr sind kaum Störungen zu erwarten – Bewölkung, Regen und Wind liegen im unkritischen Bereich.`);
+    const v = computeVerdict(0, rows.length, { start: bestStart, len: bestLen }, 'Fenster');
+    setVerdict(v.kind, v.title, v.text);
+    dayVerdictsEl.innerHTML = '';
+    dayVerdictsEl.style.display = 'none';
   }
 
   resultsEl.style.display = 'block';
@@ -2091,6 +2474,125 @@ function circularDiff(a, b) {
   return d > 180 ? 360 - d : d;
 }
 
+// ---------------------------------------------------------------------------
+// Live-Nowcast: gleiche Auswertung wie das Push-Backend (check_rain.py).
+// Statt 32 Einzelpunkten wird das komplette 1-km-Raster im 20-km-Umkreis
+// abgefragt (1 Anfrage, ca. 1.600 Kacheln). Pro Kachel wird der Regenbeginn
+// bestimmt; je Himmelsrichtung ergibt eine Ausgleichsgerade über die
+// Beginnzeiten Zuggeschwindigkeit und Ankunftszeit am Ort.
+// Schwelle 0,02 mm je 15 Min. (zwei Zeitschritte in Folge), wie im Backend.
+// ---------------------------------------------------------------------------
+const NOWCAST_BASE = 'https://dataset.api.hub.geosphere.at/v1';
+const NOWCAST_RAIN_MIN = 0.02;
+const NOWCAST_RADIUS_KM = 20;
+
+function nowcastOnset(times, vals) {
+  if (!times || !vals) return null;
+  const n = Math.min(times.length, vals.length);
+  for (let i = 0; i < n; i++) {
+    const v = Number(vals[i]) || 0;
+    const next = i + 1 < n ? (Number(vals[i + 1]) || 0) : v;
+    if (v >= NOWCAST_RAIN_MIN && (next >= NOWCAST_RAIN_MIN || i === n - 1)) {
+      return { idx: i, time: times[i], amount: v };
+    }
+  }
+  return null;
+}
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function bearingDegTo(lat1, lon1, lat2, lon2) {
+  const rad = Math.PI / 180;
+  const dl = (lon2 - lon1) * rad;
+  const y = Math.sin(dl) * Math.cos(lat2 * rad);
+  const x = Math.cos(lat1 * rad) * Math.sin(lat2 * rad) - Math.sin(lat1 * rad) * Math.cos(lat2 * rad) * Math.cos(dl);
+  return (Math.atan2(y, x) / rad + 360) % 360;
+}
+function rainDescription(mmPer15) {
+  if (mmPer15 < 0.2) return 'Nieselregen';
+  if (mmPer15 < 2) return 'leichter Regen';
+  if (mmPer15 < 4) return 'moderater Regen';
+  return 'starker Regen';
+}
+
+// Raster im 20-km-Umkreis: [{lat, lon, dist, bearing, rr:[...]}] + Zeitachse
+async function fetchNowcastCells(lat, lon) {
+  const dLat = NOWCAST_RADIUS_KM / 111.32;
+  const dLon = NOWCAST_RADIUS_KM / (111.32 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+  const toCells = (data) => {
+    const times = data.timestamps || [];
+    const cells = [];
+    (data.features || []).forEach(f => {
+      const c = f.geometry && f.geometry.coordinates;
+      if (!c) return;
+      const rr = geoSphereValues(f, 'rr');
+      if (!rr.length) return;
+      cells.push({ lat: c[1], lon: c[0], dist: haversineKm(lat, lon, c[1], c[0]),
+                   bearing: bearingDegTo(lat, lon, c[1], c[0]), rr });
+    });
+    return { times, cells };
+  };
+  try {
+    const url = `${NOWCAST_BASE}/grid/forecast/nowcast-v1-15min-1km?parameters=rr` +
+      `&bbox=${(lat - dLat).toFixed(5)},${(lon - dLon).toFixed(5)},${(lat + dLat).toFixed(5)},${(lon + dLon).toFixed(5)}` +
+      `&output_format=geojson`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Raster-Fehler');
+    const out = toCells(await res.json());
+    if (out.cells.length >= 20) return { ...out, source: 'grid' };
+    throw new Error('Raster leer');
+  } catch (e) {
+    // Ersatzweg: 8 Richtungen x 4 Entfernungen als Einzelpunkte
+    const pts = [];
+    RING_DIRECTIONS.forEach(d => [5, 10, 15, 20].forEach(km => {
+      const [plat, plon] = destinationPoint(lat, lon, d.deg, km);
+      pts.push([plat, plon]);
+    }));
+    const url = `${NOWCAST_BASE}/timeseries/forecast/nowcast-v1-15min-1km?parameters=rr&` +
+      pts.map(q => `lat_lon=${q[0].toFixed(4)},${q[1].toFixed(4)}`).join('&') + '&output_format=geojson';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('GeoSphere-API-Fehler');
+    return { ...toCells(await res.json()), source: 'points' };
+  }
+}
+
+// Regenzug je Himmelsrichtung: Ausgleichsgerade Beginnzeit ~ Entfernung (wie im Backend)
+function analyzeNowcastFront(cells, times) {
+  const sectors = {};
+  cells.forEach(c => {
+    if (c.dist < 2 || c.dist > NOWCAST_RADIUS_KM) return;
+    const o = nowcastOnset(times, c.rr);
+    if (!o) return;
+    const sec = Math.round(c.bearing / 45) % 8;
+    (sectors[sec] = sectors[sec] || []).push({ d: c.dist, t: new Date(o.time).getTime() / 1000, amount: o.amount });
+  });
+  const now = Date.now() / 1000;
+  const found = [];
+  Object.keys(sectors).forEach(k => {
+    const pts = sectors[k];
+    if (pts.length < 3) return;
+    const n = pts.length;
+    const sd = pts.reduce((x, p) => x + p.d, 0), st = pts.reduce((x, p) => x + p.t, 0);
+    const sdt = pts.reduce((x, p) => x + p.d * p.t, 0), sdd = pts.reduce((x, p) => x + p.d * p.d, 0);
+    const den = n * sdd - sd * sd;
+    if (Math.abs(den) < 1e-6) return;
+    const a = (n * sdt - sd * st) / den;   // Sekunden pro km
+    const b = (st - a * sd) / n;           // Ankunft (epoch) bei Entfernung 0
+    if (a >= 0) return;                    // weiter entfernt muss früher beginnen
+    const speed = -3600 / a;
+    if (speed < 10 || speed > 120) return;
+    if (b < now - 300 || b > now + 3 * 3600) return;
+    if (Math.max(...pts.map(p => Math.abs(p.t - (a * p.d + b)))) > 40 * 60) return;
+    found.push({ eta: b, speed, dirLabel: RING_DIRECTIONS[Number(k)].label,
+                 nearest: Math.min(...pts.map(p => p.d)), amount: Math.max(...pts.map(p => p.amount)) });
+  });
+  found.sort((x, y) => x.eta - y.eta);
+  return found[0] || null;
+}
+
 async function loadGeosphereLive(lat, lon) {
   const livePanel = document.getElementById('livePanel');
   const liveGrid = document.getElementById('liveGrid');
@@ -2109,97 +2611,88 @@ async function loadGeosphereLive(lat, lon) {
   liveSub.textContent = 'Live-Werte werden geladen …';
   liveGrid.innerHTML = '';
 
-  const ring = RING_DIRECTIONS.map(d => {
-    const [rlat, rlon] = destinationPoint(lat, lon, d.deg, 20);
-    return { ...d, lat: rlat, lon: rlon };
-  });
-  const points = [{ label: 'Zentrum', deg: null, lat, lon }, ...ring];
-
+  // Punktwerte am Eventort (Temperatur, Wind, Regen-Zeitreihe) + Raster ringsum, parallel
   const params = ['rr','t2m','rh2m','ff','dd','fx'];
-  let url = 'https://dataset.api.hub.geosphere.at/v1/timeseries/forecast/nowcast-v1-15min-1km?';
-  url += params.map(p => `parameters=${p}`).join('&');
-  url += '&' + points.map(pt => `lat_lon=${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`).join('&');
-  url += '&output_format=geojson';
+  const centerUrl = `${NOWCAST_BASE}/timeseries/forecast/nowcast-v1-15min-1km?` +
+    params.map(p => `parameters=${p}`).join('&') + `&lat_lon=${lat.toFixed(4)},${lon.toFixed(4)}&output_format=geojson`;
 
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('GeoSphere-API-Fehler');
-    const data = await res.json();
-    if (!data.features || !data.features.length) throw new Error('Keine Daten');
+    const [centerRes, grid] = await Promise.all([
+      fetch(centerUrl).then(r => { if (!r.ok) throw new Error('GeoSphere-API-Fehler'); return r.json(); }),
+      fetchNowcastCells(lat, lon).catch(() => null)
+    ]);
+    const cf = centerRes.features && centerRes.features[0];
+    if (!cf) throw new Error('Zentrum ohne Daten');
+    const timestamps = centerRes.timestamps || [];
+    const val = (k) => geoSphereValues(cf, k);
+    const rrC = val('rr'), t2mC = val('t2m'), ffC = val('ff'), ddC = val('dd'), fxC = val('fx');
 
-    // Punkte den Features zuordnen (nächstgelegene Koordinate)
-    const matched = points.map(pt => {
-      let best = null, bestDist = Infinity;
-      data.features.forEach(f => {
-        const [flon, flat] = f.geometry.coordinates;
-        const dist = Math.hypot(flat - pt.lat, flon - pt.lon);
-        if (dist < bestDist) { bestDist = dist; best = f; }
-      });
-      return { ...pt, params: best ? best.properties.parameters : null };
-    });
+    const nowRr = rrC[0];
+    const nowT = t2mC[0];
+    // GeoSphere liefert Wind und Böen in m/s (laut API-Metadaten) -> in km/h umrechnen.
+    const nowFf = ffC[0] != null ? ffC[0] * 3.6 : null;
+    const nowDd = ddC[0];
+    const nowFx = fxC[0] != null ? fxC[0] * 3.6 : null;
 
-    const timestamps = data.timestamps || [];
-    const center = matched[0];
-    const ringMatched = matched.slice(1);
-
-    if (!center.params) throw new Error('Zentrum ohne Daten');
-
-    const rrC = center.params.rr ? center.params.rr.data : [];
-    const t2mC = center.params.t2m ? center.params.t2m.data : [];
-    const ffC = center.params.ff ? center.params.ff.data : [];
-    const ddC = center.params.dd ? center.params.dd.data : [];
-    const fxC = center.params.fx ? center.params.fx.data : [];
-
-    const nowIdx = 0;
-    const nowRr = rrC[nowIdx];
-    const nowT = t2mC[nowIdx];
-    const nowFf = ffC[nowIdx];
-    const nowDd = ddC[nowIdx];
-    const nowFx = fxC[nowIdx];
-
-    liveSub.textContent = timestamps[nowIdx]
-      ? `Stand: ${new Date(timestamps[nowIdx]).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'})} Uhr, Punkt ${lat.toFixed(3)}, ${lon.toFixed(3)}`
+    liveSub.textContent = timestamps[0]
+      ? `Stand: ${new Date(timestamps[0]).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'})} Uhr, Punkt ${lat.toFixed(3)}, ${lon.toFixed(3)}`
       : 'Live-Werte für den genauen Punkt.';
 
     liveGrid.innerHTML = '';
     addMetric(liveGrid, 'Temperatur', nowT != null ? `${Math.round(nowT)} °C` : '–', false);
-    addMetric(liveGrid, 'Niederschlag jetzt', nowRr != null ? `${nowRr.toFixed(1)} mm/15min` : '–', nowRr > 0.1);
+    addMetric(liveGrid, 'Niederschlag jetzt',
+      nowRr != null ? `${nowRr > 0 && nowRr < 0.1 ? nowRr.toFixed(2) : nowRr.toFixed(1)} mm/15min` : '–', nowRr >= 0.1);
     addMetric(liveGrid, 'Wind', (nowFf != null && nowDd != null) ? `${Math.round(nowFf)} km/h aus ${degToCompass(nowDd)}` : '–', false);
     addMetric(liveGrid, 'Böen', nowFx != null ? `${Math.round(nowFx)} km/h` : '–', nowFx >= 50);
 
-    // Niederschlagswarnung im Umkreis 20 km
-    let localOnsetIdx = -1;
-    for (let i = 0; i < rrC.length; i++) {
-      if (rrC[i] != null && rrC[i] > 0.1) { localOnsetIdx = i; break; }
-    }
+    const horizonH = Math.max(1, Math.round(((rrC.length || 13) - 1) * 15 / 60));
+    const fmtClock = (d) => d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
 
-    const wetRing = ringMatched.filter(r => r.params && r.params.rr && r.params.rr.data[0] > 0.1);
-    let sourceDir = null;
-    if (wetRing.length && nowDd != null) {
-      wetRing.sort((a,b) => circularDiff(a.deg, nowDd) - circularDiff(b.deg, nowDd));
-      sourceDir = wetRing[0];
-    } else if (wetRing.length) {
-      sourceDir = wetRing[0];
+    // 1) Am Eventort selbst (Beginn über die ganze Nowcast-Reichweite, ca. 3 Stunden)
+    const centerOnset = nowcastOnset(timestamps, rrC);
+    // 2) Im Umkreis: Regenzug (Richtung, Geschwindigkeit, Ankunft) und aktuell nasse Kacheln
+    const cells = grid ? grid.cells : [];
+    const gTimes = grid ? (grid.times.length ? grid.times : timestamps) : timestamps;
+    const front = cells.length ? analyzeNowcastFront(cells, gTimes) : null;
+    const wetNow = cells.filter(c => c.dist <= NOWCAST_RADIUS_KM && (Number(c.rr[0]) || 0) >= NOWCAST_RAIN_MIN
+      && (c.rr.length < 2 || (Number(c.rr[1]) || 0) >= NOWCAST_RAIN_MIN));
+    let nearestWet = null;
+    if (wetNow.length) {
+      // bevorzugt Niederschlag aus der Windrichtung (zieht am ehesten heran), sonst nächster
+      const upwind = nowDd != null ? wetNow.filter(c => circularDiff(c.bearing, nowDd) <= 67.5) : [];
+      const pool = upwind.length ? upwind : wetNow;
+      nearestWet = pool.slice().sort((x, y) => x.dist - y.dist)[0];
     }
+    const kmTxt = (k) => `${Math.max(1, Math.round(k))} km`;
+    const frontTxt = (f) => `Der Regen zieht aus ${f.dirLabel} heran (nächste Kachel ca. ${kmTxt(f.nearest)} entfernt, Zuggeschwindigkeit ca. ${Math.round(f.speed)} km/h).`;
 
-    if (nowRr > 0.1) {
+    const minsToOnset = centerOnset ? Math.round((new Date(centerOnset.time).getTime() - Date.now()) / 60000) : null;
+
+    if (centerOnset && minsToOnset <= 10) {
       warnBox.className = 'precip-warning alert';
-      warnBox.innerHTML = `<strong>Niederschlag jetzt vor Ort</strong>Am gewählten Punkt fällt laut Nowcast bereits Niederschlag.`;
+      warnBox.innerHTML = `<strong>Niederschlag jetzt vor Ort</strong>${rainDescription(centerOnset.amount)} am gewählten Punkt (${centerOnset.amount.toFixed(2)} mm/15 Min.).`;
       warnBox.style.display = 'block';
-    } else if (localOnsetIdx > 0) {
-      const minutes = localOnsetIdx * 15;
-      const dirText = sourceDir ? ` – erkennbar im Umkreis von 20 km aus ${sourceDir.label}` : '';
+    } else if (centerOnset || front) {
+      const etaMs = centerOnset ? new Date(centerOnset.time).getTime() : front.eta * 1000;
+      const mins = Math.max(1, Math.round((etaMs - Date.now()) / 60000));
+      const amount = centerOnset ? centerOnset.amount : front.amount;
+      const rel = mins < 60 ? `in ca. ${mins} Minuten` : `in ca. ${(mins / 60).toFixed(1).replace('.', ',')} Stunden`;
       warnBox.className = 'precip-warning alert';
-      warnBox.innerHTML = `<strong>Niederschlag nähert sich</strong>Nowcast erwartet Niederschlag am gewählten Punkt in ca. ${minutes} Minuten${dirText}.`;
+      warnBox.innerHTML = `<strong>Niederschlag nähert sich</strong>${rainDescription(amount)}: Nowcast erwartet Niederschlag am gewählten Punkt ${rel} (ca. ${fmtClock(new Date(etaMs))} Uhr). ` +
+        (front ? frontTxt(front) : (nearestWet ? `Aktuell ca. ${kmTxt(nearestWet.dist)} entfernt im ${degToCompass(nearestWet.bearing)}.` : ''));
       warnBox.style.display = 'block';
-    } else if (wetRing.length) {
-      const dirLabels = wetRing.map(w => w.label).join(', ');
+    } else if (wetNow.length) {
+      const labels = [...new Set(wetNow.slice().sort((x, y) => x.dist - y.dist).map(c => degToCompass(c.bearing)))].slice(0, 3);
       warnBox.className = 'precip-warning info';
-      warnBox.innerHTML = `<strong>Niederschlag in der Nähe</strong>Im 20-km-Umkreis wird aktuell Niederschlag erfasst (${dirLabels}), erreicht den gewählten Punkt laut Nowcast innerhalb der nächsten Stunde aber nicht.`;
+      warnBox.innerHTML = `<strong>Niederschlag in der Nähe</strong>Im ${NOWCAST_RADIUS_KM}-km-Umkreis wird aktuell Niederschlag erfasst (nächster ca. ${kmTxt(Math.min(...wetNow.map(c => c.dist)))} entfernt; ${labels.join(', ')}), erreicht den gewählten Punkt laut Nowcast in den nächsten ${horizonH} Stunden aber nicht.`;
+      warnBox.style.display = 'block';
+    } else if (!grid) {
+      warnBox.className = 'precip-warning info';
+      warnBox.innerHTML = `<strong>Umkreis nicht abrufbar</strong>Für den Punkt selbst erwartet der Nowcast in den nächsten ${horizonH} Stunden keinen Niederschlag. Der Umkreis konnte gerade nicht geprüft werden.`;
       warnBox.style.display = 'block';
     } else {
       warnBox.className = 'precip-warning info';
-      warnBox.innerHTML = `<strong>Kein Niederschlag erkennbar</strong>Weder am Punkt selbst noch im 20-km-Umkreis zeigt der Nowcast (nächste Stunde) Niederschlag.`;
+      warnBox.innerHTML = `<strong>Kein Niederschlag erkennbar</strong>Aktuell kein Niederschlag im ${NOWCAST_RADIUS_KM}-km-Umkreis, und am Punkt selbst erwartet der Nowcast auch in den nächsten ${horizonH} Stunden keinen.`;
       warnBox.style.display = 'block';
     }
   } catch (e) {
