@@ -171,6 +171,7 @@
     cursor:pointer;
   }
   #enddatumWrap{flex:1;min-width:160px;}
+  .hint-small{margin:2px 0 0 24px;font-size:12px;color:var(--muted,#8a8070);line-height:1.4;}
 
   .mode-toggle{
     display:flex;
@@ -737,6 +738,7 @@
       </div>
       <div class="events-actions">
         <button type="button" class="submit-btn small" id="saveEventBtn">Event speichern</button>
+        <button type="button" class="text-btn" id="saveAsNewBtn" style="display:none;">Als neues Event speichern</button>
         <button type="button" class="text-btn" id="changePwBtn">Passwort ändern</button>
         <button type="button" class="text-btn" id="lockAgainBtn">Abmelden</button>
       </div>
@@ -795,6 +797,13 @@
         <label for="enddatum">Enddatum</label>
         <input type="date" id="enddatum">
       </div>
+    </div>
+    <div id="continuousWrap" style="display:none;margin-top:10px;">
+      <label class="checkbox-label" style="padding-bottom:4px;">
+        <input type="checkbox" id="continuous">
+        Durchgehend, auch nachts (Ausnahme)
+      </label>
+      <p class="hint-small" id="continuousHint"></p>
     </div>
     <div class="field-row time-row" style="margin-top:18px;">
       <div>
@@ -873,6 +882,9 @@ const bisInput = document.getElementById('bis');
 const multidayCheckbox = document.getElementById('multiday');
 const enddatumWrap = document.getElementById('enddatumWrap');
 const enddatumInput = document.getElementById('enddatum');
+const continuousCheckbox = document.getElementById('continuous');
+const continuousWrap = document.getElementById('continuousWrap');
+const continuousHint = document.getElementById('continuousHint');
 const checkBtn = document.getElementById('checkBtn');
 const statusLine = document.getElementById('statusLine');
 const resultsEl = document.getElementById('results');
@@ -953,6 +965,7 @@ try {
   const deleteEventBtn = document.getElementById('deleteEventBtn');
   const eventName = document.getElementById('eventName');
   const saveEventBtn = document.getElementById('saveEventBtn');
+  const saveAsNewBtn = document.getElementById('saveAsNewBtn');
   const eventsStatus = document.getElementById('eventsStatus');
   const lockAgainBtn = document.getElementById('lockAgainBtn');
 
@@ -1123,6 +1136,7 @@ try {
         lon: ev.lon,
         datum: ev.datum,
         enddatum: ev.enddatum || null,
+        durchgehend: !!ev.durchgehend,
         von: ev.von,
         bis: ev.bis,
         tokens: FV.arrayUnion(...addTokens),
@@ -1278,6 +1292,14 @@ try {
   pwNewInput2.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPasswordChange(); });
 
   let eventsCache = {}; // id -> Eventdaten, für Dropdown-Auswahl
+  let editingEventId = null; // gesetzt, wenn ein geladenes Event bearbeitet wird
+
+  function setEditing(id) {
+    editingEventId = id || null;
+    saveEventBtn.textContent = editingEventId ? 'Änderungen speichern' : 'Event speichern';
+    saveAsNewBtn.style.display = editingEventId ? '' : 'none';
+    if (!editingEventId) eventName.value = '';
+  }
 
 async function loadEvents() {
   eventSelect.innerHTML = '<option value="">Lädt …</option>';
@@ -1291,16 +1313,35 @@ async function loadEvents() {
     placeholder.value = '';
     placeholder.textContent = snap.empty ? 'Keine gespeicherten Events' : '– Event wählen –';
     eventSelect.appendChild(placeholder);
+    // Anstehende Events zuerst (nächstes oben), vergangene danach (jüngstes oben)
+    // in eigener Gruppe - so bleiben alte Events erreichbar, stören aber nicht.
+    const todayIso = localISODate(new Date());
+    const upcoming = [], past = [];
     snap.forEach(doc => {
       const ev = doc.data();
       eventsCache[doc.id] = ev;
+      const last = ev.enddatum || ev.datum || '';
+      (last && last < todayIso ? past : upcoming).push({ id: doc.id, ev });
+    });
+    upcoming.sort((a, b) => (a.ev.datum || '').localeCompare(b.ev.datum || ''));
+    past.sort((a, b) => (b.ev.datum || '').localeCompare(a.ev.datum || ''));
+    const addOption = (parent, { id, ev }) => {
       const opt = document.createElement('option');
-      opt.value = doc.id;
+      opt.value = id;
       const zeit = ev.von ? `, ${ev.von}–${ev.bis} Uhr` : '';
       const datumLabel = ev.enddatum && ev.enddatum !== ev.datum ? `${ev.datum} – ${ev.enddatum}` : (ev.datum || '');
       opt.textContent = `${ev.name || '(ohne Namen)'} — ${ev.ortName || ''} — ${datumLabel}${zeit}`;
-      eventSelect.appendChild(opt);
-    });
+      parent.appendChild(opt);
+    };
+    upcoming.forEach(x => addOption(eventSelect, x));
+    if (past.length) {
+      const grp = document.createElement('optgroup');
+      grp.label = 'Vergangene Events';
+      past.forEach(x => addOption(grp, x));
+      eventSelect.appendChild(grp);
+    }
+    if (editingEventId && !eventsCache[editingEventId]) setEditing(null);
+    else if (editingEventId) eventSelect.value = editingEventId;
   } catch (e) {
     eventSelect.innerHTML = '<option value="">Events konnten nicht geladen werden</option>';
   }
@@ -1326,6 +1367,8 @@ deleteEventBtn.addEventListener('click', () => {
 
 function loadEventIntoForm(ev, id) {
   refreshPushButtonState(id || null);
+  setEditing(id || null);
+  eventName.value = ev.name || '';
   selectedPlace = { name: ev.ortName, lat: ev.lat, lon: ev.lon };
   ortInput.value = ev.ortName || '';
   if (ev.datum) { datumInput.value = ev.datum; datumTouched = true; }
@@ -1337,12 +1380,15 @@ function loadEventIntoForm(ev, id) {
     enddatumInput.value = ev.enddatum;
     enddatumTouched = true;
     syncEnddatumBounds();
+    continuousCheckbox.checked = !!ev.durchgehend;
   } else {
     multidayCheckbox.checked = false;
     enddatumWrap.style.display = 'none';
     enddatumTouched = false;
     enddatumInput.value = datumInput.value;
+    continuousCheckbox.checked = false;
   }
+  updateContinuousUi();
   document.querySelector('.panel:not(#eventsPanel)').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1353,6 +1399,7 @@ async function deleteEvent(id, name) {
     await db.collection('events').doc(id).delete();
     try { await db.collection('event_subscriptions').doc(id).delete(); } catch (e) { /* egal, falls keine Subscription existierte */ }
     if (activeEventId === id) refreshPushButtonState(null);
+    if (editingEventId === id) setEditing(null);
     loadEvents();
   } catch (e) {
     eventsStatus.className = 'status-line err';
@@ -1360,7 +1407,7 @@ async function deleteEvent(id, name) {
   }
 }
 
-saveEventBtn.addEventListener('click', async () => {
+async function saveEvent(asNew) {
   eventsStatus.className = 'status-line';
   if (!selectedPlace) {
     eventsStatus.className = 'status-line err';
@@ -1373,28 +1420,59 @@ saveEventBtn.addEventListener('click', async () => {
     return;
   }
   eventsStatus.textContent = 'Speichert …';
+  const fields = {
+    name: eventName.value.trim(),
+    ortName: selectedPlace.name,
+    lat: selectedPlace.lat,
+    lon: selectedPlace.lon,
+    datum: datumInput.value,
+    enddatum: (multidayCheckbox.checked && enddatumInput.value) ? enddatumInput.value : null,
+    durchgehend: !!(multidayCheckbox.checked && enddatumInput.value && continuousCheckbox.checked),
+    von: vonInput.value,
+    bis: bisInput.value
+  };
   try {
-    const docRef = await db.collection('events').add({
-      name: eventName.value.trim(),
-      ortName: selectedPlace.name,
-      lat: selectedPlace.lat,
-      lon: selectedPlace.lon,
-      datum: datumInput.value,
-      enddatum: (multidayCheckbox.checked && enddatumInput.value) ? enddatumInput.value : null,
-      von: vonInput.value,
-      bis: bisInput.value,
-      createdBy: (auth.currentUser && auth.currentUser.email) || 'Team',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    eventName.value = '';
-    eventsStatus.textContent = 'Event gespeichert.';
+    let id;
+    if (editingEventId && !asNew) {
+      // Bestehendes Event aktualisieren (kein Duplikat). Ersteller/Anlegedatum bleiben.
+      id = editingEventId;
+      await db.collection('events').doc(id).update(fields);
+      // Hat das Event schon Push-Abos, deren Kopie der Eventdaten mit aktualisieren
+      // und wieder "nicht beendet" setzen (z. B. bei verschobenem Datum).
+      try {
+        const subRef = db.collection('event_subscriptions').doc(id);
+        const subSnap = await subRef.get();
+        if (subSnap.exists) {
+          await subRef.update({
+            ortName: fields.ortName, lat: fields.lat, lon: fields.lon,
+            datum: fields.datum, enddatum: fields.enddatum, durchgehend: fields.durchgehend, von: fields.von, bis: fields.bis,
+            finished: false,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      } catch (e) { /* Event ist gespeichert; Abo-Kopie wird beim nächsten Aktivieren erneuert */ }
+    } else {
+      const docRef = await db.collection('events').add({
+        ...fields,
+        createdBy: (auth.currentUser && auth.currentUser.email) || 'Team',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      id = docRef.id;
+    }
+    eventsStatus.textContent = (editingEventId && !asNew) ? 'Änderungen gespeichert.' : 'Event gespeichert.';
     await loadEvents();
-    refreshPushButtonState(docRef.id);
+    setEditing(id);
+    eventSelect.value = id;
+    loadEventBtn.disabled = false;
+    deleteEventBtn.disabled = false;
+    refreshPushButtonState(id);
   } catch (e) {
     eventsStatus.className = 'status-line err';
     eventsStatus.textContent = 'Speichern fehlgeschlagen.';
   }
-});
+}
+saveEventBtn.addEventListener('click', () => saveEvent(false));
+saveAsNewBtn.addEventListener('click', () => saveEvent(true));
 
 } catch (e) {
   console.error('Firebase-Initialisierung fehlgeschlagen:', e);
@@ -1454,6 +1532,13 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 
 datumInput.addEventListener('change', syncEnddatumBounds);
 
+function updateContinuousUi() {
+  continuousWrap.style.display = multidayCheckbox.checked ? 'block' : 'none';
+  if (!multidayCheckbox.checked) continuousCheckbox.checked = false;
+  continuousHint.textContent = continuousCheckbox.checked
+    ? 'Ein einziges Fenster vom ersten Tag „von" bis zum letzten Tag „bis" – inklusive Nächte. Regen-Pushes können dann auch nachts kommen.'
+    : 'Standard: Das Zeitfenster gilt an jedem Tag einzeln (z. B. täglich 10:00–23:00). Nachts keine Auswertung und keine Pushes.';
+}
 multidayCheckbox.addEventListener('change', () => {
   if (multidayCheckbox.checked) {
     enddatumWrap.style.display = 'block';
@@ -1461,7 +1546,10 @@ multidayCheckbox.addEventListener('change', () => {
   } else {
     enddatumWrap.style.display = 'none';
   }
+  updateContinuousUi();
 });
+continuousCheckbox.addEventListener('change', updateContinuousUi);
+updateContinuousUi();
 
 // default Zeitfenster: aktuelle Uhrzeit bis +6 Std. (nur solange nichts geändert wurde).
 // Reicht das über Mitternacht hinaus, läuft "bis" einfach in den nächsten Tag weiter -
@@ -1816,6 +1904,31 @@ async function runCheck() {
   }
 }
 
+// Überwachungs-/Auswertungsfenster als [{start,end}] mit lokalen ISO-Strings.
+//  - eintägig: von-bis (liegt "bis" vor/gleich "von", läuft es in den Folgetag)
+//  - mehrtägig + continuous: EIN Fenster vom ersten Tag "von" bis zum letzten Tag "bis"
+//  - mehrtägig (Standard): pro Tag ein Fenster von-bis, Nächte bleiben außen vor
+// Gleiche Logik wie event_windows() im Backend (check_rain.py).
+function buildWindows(startDate, endDate, von, bis, continuous) {
+  const nextDay = d => localISODate(new Date(new Date(d + 'T00:00:00').getTime() + 86400000));
+  const overnight = bis <= von;
+  if (!endDate || endDate === startDate) {
+    return [{ start: `${startDate}T${von}`, end: `${overnight ? nextDay(startDate) : startDate}T${bis}` }];
+  }
+  if (continuous) return [{ start: `${startDate}T${von}`, end: `${endDate}T${bis}` }];
+  const wins = [];
+  for (let d = startDate; d <= endDate; d = nextDay(d)) {
+    wins.push({ start: `${d}T${von}`, end: `${overnight ? nextDay(d) : d}T${bis}` });
+  }
+  return wins;
+}
+
+// "03.10. 10:00" + "03.10. 22:00" -> "03.10. 10:00–22:00" (Datum nur einmal, wenn gleicher Tag)
+function rangeLabel(a, b) {
+  if (a.time.length > 5 && a.time.slice(0, 6) === b.time.slice(0, 6)) return `${a.time}–${b.time.slice(7)}`;
+  return `${a.time}–${b.time}`;
+}
+
 function renderResults(data, claefMap) {
   const chosenDate = datumInput.value;
   const vonH = vonInput.value;
@@ -1839,27 +1952,30 @@ function renderResults(data, claefMap) {
   // Event) oder - falls "bis" zeitlich vor "von" liegt - automatisch der nächste
   // Kalendertag. Der Vergleich läuft rein über die ISO-Zeitstrings (sortieren
   // chronologisch korrekt), das deckt Übernacht- wie Mehrtages-Fenster gleich ab.
-  const isMultiday = multidayCheckbox.checked && !!enddatumInput.value;
-  const endDate = isMultiday
-    ? enddatumInput.value
-    : (bisH < vonH
-        ? localISODate(new Date(new Date(chosenDate + 'T00:00:00').getTime() + 86400000))
-        : chosenDate);
-  const spansMultipleDays = endDate !== chosenDate;
-  const startStr = `${chosenDate}T${vonH}`;
-  const endStr = `${endDate}T${bisH}`;
+  const isMultiday = multidayCheckbox.checked && !!enddatumInput.value && enddatumInput.value !== chosenDate;
+  const continuous = isMultiday && continuousCheckbox.checked;
+  const perDay = isMultiday && !continuous;
+  const windows = buildWindows(chosenDate, isMultiday ? enddatumInput.value : null, vonH, bisH, continuous);
+  const endDate = windows[windows.length - 1].end.slice(0, 10);
+  const lastCalendarDay = isMultiday ? enddatumInput.value : endDate;
+  const spansMultipleDays = isMultiday || endDate !== chosenDate;
 
-  // filter hourly entries within chosen date + window
+  // filter hourly entries within the window(s); winOf = Index des Fensters (Tag), damit
+  // "zusammenhängende" Phasen nie über eine Nacht zwischen zwei Tagen hinweg gebildet werden
   const times = h.time;
   const idxs = [];
+  const winOf = {};
   for (let i=0;i<times.length;i++){
     const t = times[i]; // "YYYY-MM-DDTHH:MM"
-    if (t >= startStr && t <= endStr) idxs.push(i);
+    const w = windows.findIndex(win => t >= win.start && t <= win.end);
+    if (w !== -1) { idxs.push(i); winOf[i] = w; }
   }
 
-  const windowLabel = spansMultipleDays
-    ? `${formatDate(chosenDate)}, ${vonH} Uhr – ${formatDate(endDate)}, ${bisH} Uhr`
-    : `${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`;
+  const windowLabel = perDay
+    ? `${formatDate(chosenDate)} – ${formatDate(lastCalendarDay)}, täglich ${vonH}–${bisH} Uhr`
+    : (spansMultipleDays
+      ? `${formatDate(chosenDate)}, ${vonH} Uhr – ${formatDate(endDate)}, ${bisH} Uhr`
+      : `${formatDate(chosenDate)}, ${vonH}–${bisH} Uhr`);
   document.getElementById('resultOrt').textContent = `${selectedPlace.name} — ${windowLabel}`;
   const liveBadge = document.getElementById('liveBadge');
   liveBadge.style.display = isToday ? 'inline-block' : 'none';
@@ -1933,7 +2049,7 @@ function renderResults(data, claefMap) {
     const timeLabel = spansMultipleDays
       ? `${dateStr.slice(8,10)}.${dateStr.slice(5,7)}. ${h.time[i].slice(11,16)}`
       : h.time[i].slice(11,16);
-    return { time: timeLabel, temp, cloud, prob, mm, gust, code, status, riskScore, claefFlag };
+    return { time: timeLabel, temp, cloud, prob, mm, gust, code, status, riskScore, claefFlag, win: winOf[i] };
   });
   avgCloud = Math.round(avgCloud / rows.length);
 
@@ -1954,7 +2070,7 @@ function renderResults(data, claefMap) {
   const sunsetDates = [];
   {
     let d = new Date(chosenDate + 'T00:00:00');
-    const endD = new Date(endDate + 'T00:00:00');
+    const endD = new Date(lastCalendarDay + 'T00:00:00');
     while (d.getTime() <= endD.getTime()) {
       sunsetDates.push(localISODate(d));
       d = new Date(d.getTime() + 86400000);
@@ -1974,6 +2090,9 @@ function renderResults(data, claefMap) {
   // bester zusammenhängender Zeitraum (status 'g')
   let bestStart = -1, bestLen = 0, curStart=-1, curLen=0;
   rows.forEach((r,i) => {
+    if (i > 0 && r.win !== rows[i-1].win) { // neuer Tag: Phase endet an der Nacht
+      if (curLen>bestLen){bestLen=curLen;bestStart=curStart;} curStart=-1; curLen=0;
+    }
     if (r.status==='g') { if(curStart===-1) curStart=i; curLen++; }
     else { if (curLen>bestLen){bestLen=curLen;bestStart=curStart;} curStart=-1; curLen=0; }
   });
@@ -1983,6 +2102,7 @@ function renderResults(data, claefMap) {
   function longestRun(statuses) {
     let s=-1, l=0, cs=-1, cl=0;
     rows.forEach((r,i) => {
+      if (i > 0 && r.win !== rows[i-1].win) { if (cl>l){l=cl;s=cs;} cs=-1; cl=0; }
       if (statuses.includes(r.status)) { if(cs===-1) cs=i; cl++; }
       else { if (cl>l){l=cl;s=cs;} cs=-1; cl=0; }
     });
@@ -2042,13 +2162,13 @@ function renderResults(data, claefMap) {
   // Bester / kritischster Zeitraum als eigene Zeilen
   let periodHtml = '';
   if (bestLen > 0) {
-    periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr</div>`;
+    periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> ${rangeLabel(rows[bestStart], rows[bestStart+bestLen-1])} Uhr</div>`;
   } else {
     periodHtml += `<div class="period-line good"><span class="dot g"></span><strong>Bester Zeitraum:</strong> im Fenster keine durchgehend unkritische Phase erkennbar</div>`;
   }
   if (worst.len > 0) {
     const reason = reasonForRange(worst.start, worst.len);
-    periodHtml += `<div class="period-line bad"><span class="dot r"></span><strong>Kritischster Zeitraum:</strong> ${rows[worst.start].time}–${rows[worst.start+worst.len-1].time} Uhr <span class="reason">(${reason})</span></div>`;
+    periodHtml += `<div class="period-line bad"><span class="dot r"></span><strong>Kritischster Zeitraum:</strong> ${rangeLabel(rows[worst.start], rows[worst.start+worst.len-1])} Uhr <span class="reason">(${reason})</span></div>`;
   } else if (worstPeakIdx !== -1 && rows[worstPeakIdx].riskScore > 5) {
     const reason = reasonForRange(worstPeakIdx, 1);
     periodHtml += `<div class="period-line bad"><span class="dot a"></span><strong>Kritischster Zeitpunkt:</strong> ${rows[worstPeakIdx].time} Uhr <span class="reason">(${reason}, im Vergleich die ungünstigste Stunde im Fenster)</span></div>`;
@@ -2081,16 +2201,16 @@ function renderResults(data, claefMap) {
   if (worstCode >= 95 || maxPrecipProb >= 60 || sumPrecip >= 2 || maxGust >= 55) {
     setVerdict('r','Indoor empfohlen',
       bestLen>0
-        ? `Im gewählten Fenster überwiegt das Risiko (${windRisk && !rainRisk ? 'starker Wind' : 'Regen, Gewitter oder starker Wind'}). Am ehesten geeignet wäre ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr, aber auch dort keine Sicherheit.`
+        ? `Im gewählten Fenster überwiegt das Risiko (${windRisk && !rainRisk ? 'starker Wind' : 'Regen, Gewitter oder starker Wind'}). Am ehesten geeignet wäre ${rangeLabel(rows[bestStart], rows[bestStart+bestLen-1])} Uhr, aber auch dort keine Sicherheit.`
         : `Über das gesamte Zeitfenster ist mit ${windRisk && !rainRisk ? 'starkem Wind' : 'Regen, Gewitter oder starkem Wind'} zu rechnen. Für den Outdoor-Teil aktuell keine sichere Phase erkennbar.`);
   } else if (rainRisk || windRisk) {
     setVerdict('a','Outdoor möglich, mit Plan B in Reichweite',
       bestLen>0
-        ? `Die beste Phase liegt bei ${rows[bestStart].time}–${rows[bestStart+bestLen-1].time} Uhr. Für den Rest des Fensters: ${riskAdvice()}`
+        ? `Die beste Phase liegt bei ${rangeLabel(rows[bestStart], rows[bestStart+bestLen-1])} Uhr. Für den Rest des Fensters: ${riskAdvice()}`
         : `Leichtes Risiko über das ganze Fenster – Outdoor ist möglich. ${riskAdvice()}`);
   } else {
     setVerdict('g','Outdoor gut geeignet',
-      `Für ${vonH}–${bisH} Uhr sind kaum Störungen zu erwarten – Bewölkung, Regen und Wind liegen im unkritischen Bereich.`);
+      `Für ${perDay ? 'täglich ' : ''}${vonH}–${bisH} Uhr sind kaum Störungen zu erwarten – Bewölkung, Regen und Wind liegen im unkritischen Bereich.`);
   }
 
   resultsEl.style.display = 'block';

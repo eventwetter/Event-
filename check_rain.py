@@ -474,24 +474,51 @@ def send_push(title, body, token, tag='event-rain'):
     return messaging.send(msg)
 
 
-def parse_event_window(sub):
-    """Start-/Endzeitpunkt des Events als tz-aware datetimes (Europe/Vienna),
-    inkl. Übernacht-Rollover - identisch zur Logik im Frontend (runCheck())."""
+def event_windows(sub):
+    """Liste der Überwachungsfenster [(start, end), ...] als tz-aware datetimes
+    (Europe/Vienna) - identisch zur Logik im Frontend (buildWindows()):
+      - eintägig: ein Fenster von-bis (liegt "bis" vor/gleich "von", läuft es über
+        Mitternacht in den Folgetag),
+      - mehrtägig + "durchgehend": EIN Fenster vom Starttag "von" bis zum Endtag "bis"
+        (Nächte eingeschlossen),
+      - mehrtägig (Standard): pro Tag ein eigenes Fenster von-bis, nachts Ruhe.
+    Gibt [] zurück, wenn die Daten nicht lesbar sind."""
     try:
         datum = sub.get('datum')
         von = sub.get('von') or '00:00'
         bis = sub.get('bis') or '23:59'
         enddatum = sub.get('enddatum')
-        start_dt = LOCAL_TZ.localize(datetime.fromisoformat(f"{datum}T{von}"))
-        end_datum = enddatum or datum
-        if not enddatum and bis <= von:
-            end_naive = datetime.fromisoformat(f"{datum}T{bis}") + timedelta(days=1)
-        else:
-            end_naive = datetime.fromisoformat(f"{end_datum}T{bis}")
-        end_dt = LOCAL_TZ.localize(end_naive)
-        return start_dt, end_dt
+        day0 = datetime.fromisoformat(datum).date()
+        overnight = bis <= von
+
+        def mk(day, hhmm):
+            return LOCAL_TZ.localize(datetime.fromisoformat(f"{day.isoformat()}T{hhmm}"))
+
+        if not enddatum or enddatum == datum:
+            end_day = day0 + timedelta(days=1) if overnight else day0
+            return [(mk(day0, von), mk(end_day, bis))]
+
+        last_day = datetime.fromisoformat(enddatum).date()
+        if sub.get('durchgehend'):
+            return [(mk(day0, von), mk(last_day, bis))]
+
+        windows = []
+        d = day0
+        while d <= last_day:
+            end_day = d + timedelta(days=1) if overnight else d
+            windows.append((mk(d, von), mk(end_day, bis)))
+            d += timedelta(days=1)
+        return windows
     except Exception:
+        return []
+
+
+def parse_event_window(sub):
+    """Gesamtzeitraum (erster Start, letztes Ende) - Kompatibilität für Tests."""
+    w = event_windows(sub)
+    if not w:
         return None, None
+    return w[0][0], w[-1][1]
 
 
 def run():
@@ -515,16 +542,23 @@ def run():
             if sub.get('finished') or not tokens or lat is None or lon is None:
                 continue
 
-            start_dt, end_dt = parse_event_window(sub)
-            if not start_dt or not end_dt:
+            windows = event_windows(sub)
+            if not windows:
                 print(f"  {doc.id}: Zeitfenster nicht lesbar - übersprungen.")
                 continue
 
-            if now_local > end_dt:
+            if now_local > windows[-1][1]:
                 db.collection('event_subscriptions').document(doc.id).update({'finished': True})
                 continue
             # Der Nowcast reicht ohnehin nur ca. 2-3h voraus - frueher ist er nicht relevant.
-            if now_local < start_dt - timedelta(hours=3):
+            # Aktiv ist nur, wer in (oder kurz vor) einem der Fenster liegt; zwischen den
+            # Tagen eines mehrtägigen Events (Nacht) wird nichts geprüft und nichts gepusht.
+            in_window = any(st - timedelta(hours=3) <= now_local <= en for st, en in windows)
+            if not in_window:
+                # Alarmzustand zurücksetzen, damit am nächsten Tag wieder "frisch" gemeldet wird
+                if sub.get('last_alert_key') or sub.get('last_weather_state', 'stable') != 'stable':
+                    db.collection('event_subscriptions').document(doc.id).update(
+                        {'last_alert_key': '', 'last_weather_state': 'stable'})
                 continue
 
             lat, lon = float(lat), float(lon)
