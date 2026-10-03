@@ -1953,7 +1953,7 @@ async function runCheck() {
   const ctx = checkCtx;
 
   try {
-    const MODEL_LIST = 'best_match,icon_d2,ecmwf_ifs04,gfs_seamless,geosphere_arome_austria,arome_france';
+    const MODEL_LIST = 'best_match,icon_d2,ecmwf_ifs04,gfs_seamless,arome_france';
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}` +
       `&hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,wind_speed_10m,wind_gusts_10m,weather_code` +
       `&current=temperature_2m,precipitation,cloud_cover,wind_gusts_10m,weather_code,is_day` +
@@ -2083,8 +2083,8 @@ function renderResults(data, claefMap) {
     return;
   }
 
-  // Modellvergleich: Streuung von Temperatur/Niederschlag/Wind über die 5 Einzelmodelle
-  const confidence = calculateModelConfidence(h, idxs);
+  // Modellvergleich: Streuung von Temperatur/Niederschlag/Wind über die Einzelmodelle (+ C-LAEF, wo verfügbar)
+  const confidence = calculateModelConfidence(h, idxs, claefMap);
 
   // echte Sonnenuntergangszeit (Astronomie, nicht modellabhängig) je Kalendertag im Fenster.
   // Robust gegen Modell-Suffixe im Feldnamen (z. B. "sunset_best_match" statt "sunset"),
@@ -2286,7 +2286,7 @@ function renderResults(data, claefMap) {
   periodBox.innerHTML = periodHtml;
 
   // Modellvergleich & C-LAEF-Hinweis: als Methodik-Fußnote ganz unten, nicht in der Übersicht
-  let methodHtml = `<p><strong>Modellvergleich</strong> (best_match, ICON-D2, ECMWF IFS, GFS, AROME Austria, AROME France): ${confidence.text}</p>`;
+  let methodHtml = `<p><strong>Modellvergleich</strong> (best_match, ICON-D2, ECMWF IFS, GFS, AROME France${claefMap ? ', C-LAEF AlpeAdria' : ''}): ${confidence.text}</p>`;
   if (claefUsed) {
     methodHtml += `<p>¹ Niederschlag und Windböen für die markierten Stunden verfeinert durch <strong>C-LAEF AlpeAdria</strong> (GeoSphere Austria, 1&nbsp;km, nur nächste ca. 60&nbsp;Std.).</p>`;
   }
@@ -2372,18 +2372,24 @@ function renderResults(data, claefMap) {
   resultsEl.style.display = 'block';
 }
 
-// Streuung der 5 Einzelmodelle (ohne best_match) über Temperatur/Niederschlag/Wind je Stunde im Fenster
-const COMPARE_MODELS = ['icon_d2','ecmwf_ifs04','gfs_seamless','geosphere_arome_austria','arome_france'];
-function modelValues(h, feld, idx) {
-  return COMPARE_MODELS.map(m => h[`${feld}_${m}`]?.[idx]).filter(v => typeof v === 'number' && Number.isFinite(v));
+// Streuung der Einzelmodelle (ohne best_match, plus C-LAEF innerhalb ~60 Std.) über Temperatur/Niederschlag/Wind je Stunde im Fenster
+// AROME Austria (GeoSphere) wird am 4.11.2026 eingestellt - an seine Stelle tritt
+// C-LAEF AlpeAdria (1 km), das direkt bei GeoSphere abgefragt wird (nur ~60 Std. voraus).
+const COMPARE_MODELS = ['icon_d2','ecmwf_ifs04','gfs_seamless','arome_france'];
+const CLAEF_FIELD = { temperature_2m: 'temp', precipitation: 'rain', wind_speed_10m: 'wind' };
+function modelValues(h, feld, idx, claefMap) {
+  const vals = COMPARE_MODELS.map(m => h[`${feld}_${m}`]?.[idx]);
+  const c = claefLookup(claefMap, h.time[idx]);
+  if (c && CLAEF_FIELD[feld]) vals.push(c[CLAEF_FIELD[feld]]);
+  return vals.filter(v => typeof v === 'number' && Number.isFinite(v));
 }
-function calculateModelConfidence(h, idxs) {
+function calculateModelConfidence(h, idxs, claefMap) {
   let totalScore = 0, validHours = 0;
   idxs.forEach(idx => {
     const span = a => a.length > 1 ? (Math.max(...a) - Math.min(...a)) : 0;
-    const temps = modelValues(h, 'temperature_2m', idx);
-    const rains = modelValues(h, 'precipitation', idx);
-    const winds = modelValues(h, 'wind_speed_10m', idx);
+    const temps = modelValues(h, 'temperature_2m', idx, claefMap);
+    const rains = modelValues(h, 'precipitation', idx, claefMap);
+    const winds = modelValues(h, 'wind_speed_10m', idx, claefMap);
     const tempDiff = span(temps), rainDiff = span(rains), windDiff = span(winds);
     const tempScore = Math.max(0, 100 - (Math.max(0, tempDiff - 1.5) * 15));
     const rainScore = Math.max(0, 100 - (Math.max(0, rainDiff - 0.5) * 12));
@@ -2436,7 +2442,7 @@ function isInAustria(lat, lon) {
 // fehl, bleiben einfach die Open-Meteo-Werte unverändert (map bleibt null).
 async function fetchClaefHourlyMap(lat, lon) {
   try {
-    const params = '10u,10v,10fg,rain';
+    const params = '2t,10u,10v,10fg,rain';
     const url = 'https://dataset.api.hub.geosphere.at/v1/timeseries/forecast/nwp-v2-1h-1km?lat_lon=' +
       encodeURIComponent(lat.toFixed(5) + ',' + lon.toFixed(5)) +
       '&parameters=' + params + '&output_format=geojson';
@@ -2450,6 +2456,7 @@ async function fetchClaefHourlyMap(lat, lon) {
     const us = geoSphereValues(f, '10u');
     const vs = geoSphereValues(f, '10v');
     const gusts = geoSphereValues(f, '10fg');
+    const temps = geoSphereValues(f, '2t');
     const rains = geoSphereValues(f, 'rain');
     const map = new Map();
     times.forEach((t, i) => {
@@ -2458,6 +2465,7 @@ async function fetchClaefHourlyMap(lat, lon) {
       const entry = {
         gust: Number.isFinite(gusts[i]) ? gusts[i] * 3.6 : undefined,
         rain: Number.isFinite(rains[i]) ? rains[i] : undefined,
+        temp: Number.isFinite(temps[i]) ? temps[i] : undefined,
         wind: (Number.isFinite(u) && Number.isFinite(v)) ? Math.sqrt(u * u + v * v) * 3.6 : undefined
       };
       if (entry.gust !== undefined || entry.rain !== undefined) map.set(hourEpoch, entry);
